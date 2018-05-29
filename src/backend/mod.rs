@@ -2,6 +2,9 @@ use super::*;
 
 mod error;
 use self::error::*;
+use std::collections::HashSet;
+
+extern crate chrono;
 
 #[derive(Clone)]
 pub enum DbOpenType
@@ -28,6 +31,25 @@ pub struct TifariBackend
     tag_thread_comms: std::sync::mpsc::Sender<TagThreadMessage>,
 }
 
+pub struct TifariDb
+{
+    connection: rusqlite::Connection,
+}
+
+#[derive(Hash)]
+pub struct Tag
+{
+    id: i64,
+    name: String,
+}
+
+pub struct Image
+{
+    id: i64,
+    path: String,
+    tags: HashSet<Tag>,
+}
+
 enum ImageThreadMessage 
 {
     Quit,
@@ -40,11 +62,6 @@ enum TagThreadMessage
     TryAdd(String),
     TryRemove(String),
     Quit,
-}
-
-struct TifariDb
-{
-    connection: rusqlite::Connection,
 }
 
 impl TifariConfig 
@@ -96,9 +113,11 @@ impl TifariDb
         }
 
         tx.execute_named(
-            "INSERT INTO images (id, path, tags_array_table) VALUES (null, :path, :tags_array_table)",
+            "INSERT INTO images (id, path, tags_array_table, created_at_time) 
+            VALUES (null, :path, :tags_array_table, :time)",
             &[(":path", path),
-              (":tags_array_table", &rusqlite::types::Null)]).unwrap();
+              (":tags_array_table", &rusqlite::types::Null),
+              (":time", &chrono::Utc::now().timestamp())]).unwrap();
 
         let image_id = tx.last_insert_rowid();
 
@@ -233,6 +252,7 @@ impl TifariDb
                         id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
                         path TEXT NOT NULL,
                         tags_array_table INTEGER,
+                        created_at_time INTEGER NOT NULL,
                         UNIQUE(id, path, tags_array_table));
 
                 CREATE TABLE IF NOT EXISTS tag_queue (
@@ -340,6 +360,77 @@ impl TifariDb
 
         tx.commit()?;
         Ok(())
+    }
+
+    pub fn search(&self, tags: &Vec<&String>, offset: i64, count: i64) -> Result<Vec<Image>>
+    {
+        if 0 >= tags.len()
+        {
+            return Ok(vec![]);
+        }
+
+        let mut query = "SELECT id FROM tags WHERE name IN (".to_string();
+        let mut params: Vec<&rusqlite::types::ToSql> = Vec::with_capacity(tags.len());
+        
+        query.push_str(&"?, ".repeat(tags.len()));
+        if tags.len() > 1 { query.push('?'); }
+        query.push(')');
+
+        for i in 0..tags.len()
+        {
+            params.push(tags[i]);
+        }
+
+        let mut statement = self.connection.prepare(&query)?;
+
+        let mut tag_ids_query = String::from("(");
+        let mut num_tags_in_query = 0;
+        let mut skip_first_comma = true;
+        for result in statement.query_map(params.as_slice(), |row| row.get(0))?
+        {
+            if !skip_first_comma
+            {
+                tag_ids_query.push_str(", ");
+            }
+
+            skip_first_comma = false;
+            tag_ids_query.push_str(String::from(result?));
+            num_tags_in_query += 1;
+        }
+
+        if num_tags_in_query == 0
+        {
+            return Ok(vec![]);
+        }
+
+        tag_ids_query.push(')');
+
+        let mut statement = self.connection.prepare(
+            "SELECT tags_array_table 
+            FROM images 
+            ORDER BY created_at_time DESC 
+            LIMIT ? OFFSET ?");
+
+        let mut results = vec![];
+        for tag_array_id in statement.query_map(&[&count, &offset], |row| row.get(0))?
+        {
+            let tag_array_id = tag_array_id?;
+
+            let count = self.connection.query_row(
+                &format!("SELECT COUNT(*) 
+                         FROM tags_array_table_{}
+                         WHERE tag_id IN {}", 
+                         tag_array_id, tag_ids_query),
+                         &[],
+                         |row| row.get(0))?;
+
+            if count == num_tags_in_query
+            {
+                results.push()
+            }
+        }
+
+        Ok(results)
     }
 }
 

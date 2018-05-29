@@ -7,3 +7,4 @@ authors = ["Justas Dabrila <justasdabrila@gmail.com>"]
 rusqlite = "0.13.0"
 walkdir = "2.1.4"
 notify = "4.0.0"
+chrono = "0.4.2"
