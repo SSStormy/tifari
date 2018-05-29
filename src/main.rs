@@ -3,6 +3,7 @@
 pub extern crate rusqlite;
 pub extern crate notify;
 pub extern crate walkdir;
+pub extern crate chrono;
 
 mod backend;
 

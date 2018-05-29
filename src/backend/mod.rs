@@ -4,8 +4,6 @@ mod error;
 use self::error::*;
 use std::collections::HashSet;
 
-extern crate chrono;
-
 #[derive(Clone)]
 pub enum DbOpenType
 {
@@ -36,7 +34,7 @@ pub struct TifariDb
     connection: rusqlite::Connection,
 }
 
-#[derive(Hash)]
+#[derive(Hash, Eq, PartialEq)]
 pub struct Tag
 {
     id: i64,
@@ -47,7 +45,37 @@ pub struct Image
 {
     id: i64,
     path: String,
+    created_at_time: chrono::DateTime<chrono::Utc>,
     tags: HashSet<Tag>,
+}
+
+impl Image
+{
+    pub fn get_from_db(db: &TifariDb, id: i64) -> Result<Self>
+    {
+        let (id, path, time, tag_array_id): (i64, String, i64, i64) = db.connection.query_row(
+            "SELECT id, path, created_at_time, tags_array_table
+            FROM images 
+            WHERE id=?",
+            &[&id],
+            |row| (row.get(0), row.get(1), row.get(2), row.get(3)))?;
+
+        let mut statement = db.connection.prepare(
+            &format!("SELECT id, name 
+                     FROM tags
+                     WHERE id=(SELECT * from tags_array_table_{})", tag_array_id))?;
+
+        let mut tags = HashSet::new();
+
+        for result in statement.query_map(&[], |row| (row.get(0), row.get(1)))?
+        {
+            let (tag_id, tag_name) = result?;
+            tags.insert(Tag{id: tag_id, name: tag_name});
+        }
+
+        use chrono::TimeZone;
+        Ok(Image { id, path, created_at_time: chrono::Utc.timestamp(time, 0), tags })
+    }
 }
 
 enum ImageThreadMessage 
@@ -362,7 +390,9 @@ impl TifariDb
         Ok(())
     }
 
-    pub fn search(&self, tags: &Vec<&String>, offset: i64, count: i64) -> Result<Vec<Image>>
+    pub fn search(&self, 
+                  tags: &Vec<&String>, 
+                  offset: usize, max_results: usize) -> Result<Vec<Image>>
     {
         if 0 >= tags.len()
         {
@@ -372,9 +402,8 @@ impl TifariDb
         let mut query = "SELECT id FROM tags WHERE name IN (".to_string();
         let mut params: Vec<&rusqlite::types::ToSql> = Vec::with_capacity(tags.len());
         
-        query.push_str(&"?, ".repeat(tags.len()));
-        if tags.len() > 1 { query.push('?'); }
-        query.push(')');
+        query.push_str(&"?, ".repeat(tags.len() - 1));
+        query.push_str("?)");
 
         for i in 0..tags.len()
         {
@@ -388,13 +417,15 @@ impl TifariDb
         let mut skip_first_comma = true;
         for result in statement.query_map(params.as_slice(), |row| row.get(0))?
         {
+            let result: i64 = result?;
+
             if !skip_first_comma
             {
                 tag_ids_query.push_str(", ");
             }
 
             skip_first_comma = false;
-            tag_ids_query.push_str(String::from(result?));
+            tag_ids_query.push_str(&result.to_string());
             num_tags_in_query += 1;
         }
 
@@ -406,17 +437,17 @@ impl TifariDb
         tag_ids_query.push(')');
 
         let mut statement = self.connection.prepare(
-            "SELECT tags_array_table 
+            "SELECT id, tags_array_table 
             FROM images 
-            ORDER BY created_at_time DESC 
-            LIMIT ? OFFSET ?");
+            ORDER BY id DESC")?;
 
         let mut results = vec![];
-        for tag_array_id in statement.query_map(&[&count, &offset], |row| row.get(0))?
+        let mut skipped = 0;
+        for result in statement.query_map(&[], |row| (row.get(0), row.get(1)))?
         {
-            let tag_array_id = tag_array_id?;
+            let (image_id, tag_array_id): (i64, i64) = result?;
 
-            let count = self.connection.query_row(
+            let count: i64 = self.connection.query_row(
                 &format!("SELECT COUNT(*) 
                          FROM tags_array_table_{}
                          WHERE tag_id IN {}", 
@@ -426,7 +457,18 @@ impl TifariDb
 
             if count == num_tags_in_query
             {
-                results.push()
+                if skipped >= offset
+                {
+                    results.push(Image::get_from_db(self, image_id)?);
+                    if results.len() >= max_results
+                    {
+                        break;
+                    }
+                }
+                else
+                {
+                    skipped += 1;
+                }
             }
         }
 
@@ -665,6 +707,115 @@ mod tests {
         assert!(db.give_tag(&img, &tag1).is_err());
         assert!(db.give_tag(&img, &tag1).is_err());
         assert!(db.give_tag(&img, &tag1).is_err());
-     
+    }
+
+    #[test]
+    fn db_search()
+    {
+        let mut db = TifariDb::new(DbOpenType::InMemory).unwrap();
+        let img1 = "test/img.png".to_string();
+        let img2 = "test/img2.png".to_string();
+        let img3 = "test/img3.png".to_string();
+
+        let tag1 = "tag1".to_string();
+        let tag2 = "tag2".to_string();
+        let tag3 = "tag3".to_string();
+
+        db.try_insert_image(&img1).unwrap();
+        db.give_tag(&img1, &tag1).unwrap();
+
+        db.try_insert_image(&img2).unwrap();
+        db.give_tag(&img2, &tag2).unwrap();
+
+        {
+            let results = db.search(&vec![&tag1], 0, 50).unwrap();
+            assert_eq!(results.len(), 1);
+            assert_eq!(results[0].path, img1);
+        }
+
+        {
+            let results = db.search(&vec![&tag2], 0, 50).unwrap();
+            assert_eq!(results.len(), 1);
+            assert_eq!(results[0].path, img2);
+        }
+
+        db.try_insert_image(&img3).unwrap();
+        db.give_tag(&img1, &tag2).unwrap();
+        db.give_tag(&img3, &tag3).unwrap();
+
+        {
+            let results = db.search(&vec![&tag2], 0, 50).unwrap();
+            assert_eq!(results.len(), 2);
+
+            assert_eq!(results[0].path, img2);
+            assert_eq!(results[1].path, img1);
+        }
+
+        db.give_tag(&img3, &tag1).unwrap();
+
+        {
+            let results = db.search(&vec![&tag1], 0, 50).unwrap();
+            assert_eq!(results.len(), 2);
+
+            assert_eq!(results[0].path, img3);
+            assert_eq!(results[1].path, img1);
+        }
+
+        {
+            let tag4 = "tag4".to_string();
+
+            for i in 0..10
+            {
+                let img = format!("test/img_iter{}.png", i);
+                db.try_insert_image(&img).unwrap();
+                db.give_tag(&img, &tag4);
+            }
+
+            let after_10 = "special_img10".to_string();
+            db.try_insert_image(&after_10).unwrap();
+            db.give_tag(&after_10, &tag4);
+
+            for i in 10..15
+            {
+                let img = format!("test/img_iter{}.png", i);
+                db.try_insert_image(&img).unwrap();
+                db.give_tag(&img, &tag4);
+            }
+
+            let after_15 = "special_img15".to_string();
+            db.try_insert_image(&after_15).unwrap();
+            db.give_tag(&after_15, &tag4);
+
+            for i in 15..20
+            {
+                let img = format!("test/img_iter{}.png", i);
+                db.try_insert_image(&img).unwrap();
+                db.give_tag(&img, &tag4);
+            }
+
+            {
+                let results = db.search(&vec![&tag4], 2, 10).unwrap();
+                assert_eq!(results.len(), 10);
+
+                assert!(results[0].path != after_15); // 18
+                assert!(results[1].path != after_15); // 17
+                assert!(results[2].path != after_15); // 16
+                assert_eq!(results[3].path, after_15); // our guy
+                assert!(results[4].path != after_15); // 15
+            }
+
+            {
+                let results = db.search(&vec![&tag4], 4, 10).unwrap();
+                assert_eq!(results.len(), 10);
+
+                assert!(results[0].path != after_15); // 16
+                assert_eq!(results[1].path, after_15); // our guy
+                assert!(results[2].path != after_15); // 15
+
+                assert!(results[6].path != after_10); // 11
+                assert_eq!(results[7].path, after_10); 
+                assert!(results[8].path != after_10); // 10
+            }
+        }
     }
 }
