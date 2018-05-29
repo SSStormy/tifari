@@ -1,13 +1,4 @@
 [[package]]
-name = "backend"
-version = "0.1.0"
-dependencies = [
- "notify 4.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
- "rusqlite 0.13.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "walkdir 2.1.4 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
 name = "bitflags"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -221,7 +212,9 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 name = "tifari"
 version = "0.1.0"
 dependencies = [
- "backend 0.1.0",
+ "notify 4.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rusqlite 0.13.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "walkdir 2.1.4 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]

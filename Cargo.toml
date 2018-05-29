@@ -4,4 +4,6 @@ version = "0.1.0"
 authors = ["Justas Dabrila <justasdabrila@gmail.com>"]
 
 [dependencies]
-backend = { path = "backend" }
+rusqlite = "0.13.0"
+walkdir = "2.1.4"
+notify = "4.0.0"
