@@ -1,6 +1,11 @@
-use super::*;
+#![feature(try_trait)]
+extern crate rusqlite;
+extern crate notify;
+extern crate walkdir;
+extern crate chrono;
 
 mod error;
+
 use self::error::*;
 use std::collections::HashSet;
 
@@ -545,8 +550,8 @@ fn scan_thread_main(path: String,
                     receiver: std::sync::mpsc::Receiver<ImageThreadMessage>,
                     tag_producer: std::sync::mpsc::Sender<TagThreadMessage>)
 {
-    use backend::walkdir::WalkDir;
-    use backend::notify::Watcher;
+    use walkdir::WalkDir;
+    use notify::Watcher;
 
     for entry in WalkDir::new(path.clone()).follow_links(true) 
     {
@@ -584,7 +589,7 @@ fn scan_thread_main(path: String,
 
         for recv in watch_recv.try_iter()
         {
-            use backend::notify::DebouncedEvent::*;
+            use notify::DebouncedEvent::*;
             let msg = match recv 
             {
                 NoticeWrite(path) => Some(TagThreadMessage::TryAdd(path.to_string_lossy().to_string())),
