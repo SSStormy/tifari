@@ -1,6 +1,7 @@
 use super::*;
 
 pub type Result<T> = std::result::Result<T, BackendError>;
+pub type Error = BackendError;
 
 #[derive(Debug)]
 pub enum BackendError 

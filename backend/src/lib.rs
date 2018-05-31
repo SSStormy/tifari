@@ -3,10 +3,13 @@ extern crate rusqlite;
 extern crate notify;
 extern crate walkdir;
 extern crate chrono;
+#[macro_use]
+extern crate serde_derive;
 
 mod error;
 
-use self::error::*;
+pub use self::error::*;
+
 use std::collections::HashSet;
 
 #[derive(Clone)]
@@ -16,6 +19,7 @@ pub enum DbOpenType
     InMemory
 }
 
+#[derive(Clone)]
 pub struct TifariConfig 
 {
     db_type: DbOpenType,
@@ -39,18 +43,19 @@ pub struct TifariDb
     connection: rusqlite::Connection,
 }
 
-#[derive(Hash, Eq, PartialEq)]
+#[derive(Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Tag
 {
     id: i64,
     name: String,
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct Image
 {
     id: i64,
     path: String,
-    created_at_time: chrono::DateTime<chrono::Utc>,
+    created_at_time : i64,
     tags: HashSet<Tag>,
 }
 
@@ -68,7 +73,7 @@ impl Image
         let mut statement = db.connection.prepare(
             &format!("SELECT id, name 
                      FROM tags
-                     WHERE id=(SELECT * from tags_array_table_{})", tag_array_id))?;
+                     WHERE id IN (SELECT tag_id from tags_array_table_{})", tag_array_id))?;
 
         let mut tags = HashSet::new();
 
@@ -78,8 +83,7 @@ impl Image
             tags.insert(Tag{id: tag_id, name: tag_name});
         }
 
-        use chrono::TimeZone;
-        Ok(Image { id, path, created_at_time: chrono::Utc.timestamp(time, 0), tags })
+        Ok(Image { id, path, created_at_time: time, tags })
     }
 }
 
@@ -231,7 +235,7 @@ impl TifariDb
             let mut statement = tx.prepare(
                 &format!("SELECT id, image_ids_array_table 
                          FROM tags 
-                         WHERE id=(
+                         WHERE id IN (
                              SELECT * from tags_array_table_{}
                          )", tag_array_table_id))?;
 
@@ -260,6 +264,11 @@ impl TifariDb
 
         tx.commit()?;
         Ok(())
+    }
+
+    pub fn new_from_cfg(config: TifariConfig) -> Result<Self> 
+    {
+        TifariDb::new(config.db_type.clone())
     }
 
     pub fn new(db_type: DbOpenType) -> Result<Self>
@@ -396,7 +405,7 @@ impl TifariDb
     }
 
     pub fn search(&self, 
-                  tags: &Vec<&String>, 
+                  tags: &Vec<String>, 
                   offset: usize, max_results: usize) -> Result<Vec<Image>>
     {
         if 0 >= tags.len()
@@ -412,7 +421,7 @@ impl TifariDb
 
         for i in 0..tags.len()
         {
-            params.push(tags[i]);
+            params.push(&tags[i]);
         }
 
         let mut statement = self.connection.prepare(&query)?;

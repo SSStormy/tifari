@@ -17,48 +17,23 @@ use hyper::server::{Service, Request, Response, Http};
 use hyper::{Method, StatusCode};
 use std::error::Error;
 
-struct Search<'a> {
-    backend: &'a backend::TifariBackend,
-}
+mod error;
+use self::error::*;
 
-#[derive(Debug)]
-pub enum APIError {
-    Hyper(hyper::Error),
-    FromUtf8(std::string::FromUtf8Error),
-    Json(serde_json::Error),
-}
-
-impl std::error::Error for APIError {
-    fn description(&self) -> &str {
-        match self {
-            APIError::Hyper(e) => e.description(),
-            APIError::FromUtf8(e) => e.description(),
-            APIError::Json(e) => e.description(),
-        }
-    }
-}
-
-impl std::fmt::Display for APIError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f,"Error")
-    }
-}
-
-impl std::convert::From<hyper::Error> for APIError {
-    fn from(e: hyper::Error) -> Self { APIError::Hyper(e) }
-}
-
-impl From<std::string::FromUtf8Error> for APIError {
-    fn from(e: std::string::FromUtf8Error) -> Self { APIError::FromUtf8(e) }
-}
-
-impl From<serde_json::Error> for APIError {
-    fn from(e: serde_json::Error) -> Self { APIError::Json(e) }
+struct Search {
+    config: backend::TifariConfig,
 }
 
 #[derive(Deserialize)]
 struct SearchQuery {
-    tags: std::collections::HashSet<String>
+    tags: Vec<String>,
+    offset: usize,
+    max: usize
+}
+
+#[derive(Serialize)]
+struct SearchResult {
+    results: Vec<backend::Image>
 }
 
 fn conv_result<T, EIn, EOut: From<EIn>>(what: Result<T, EIn>) -> Result<T, EOut> {
@@ -68,7 +43,18 @@ fn conv_result<T, EIn, EOut: From<EIn>>(what: Result<T, EIn>) -> Result<T, EOut>
     }
 }
 
-impl<'a> Service for Search<'a> {
+fn req_to_json<'a, T>(req: hyper::Request) -> impl Future<Item=T, Error=APIError>
+    where T: serde::de::DeserializeOwned {
+
+    req.body()
+        .map_err(APIError::Hyper)
+        .concat2()
+        .and_then(move |body: hyper::Chunk| {
+            conv_result(serde_json::from_slice::<T>(&body))
+        })
+}
+
+impl Service for Search {
     type Request = Request;
     type Response = Response;
     type Error = hyper::Error;
@@ -79,69 +65,90 @@ impl<'a> Service for Search<'a> {
 
 
     fn call(&self, req: Request) -> Self::Future {
+        // TODO: @HACK cloning the config with each request is horrible
+        let cfg = self.config.clone();
 
-        let response = Self::Response::new();
-
-        let task = req.body()
-            .map_err(APIError::Hyper)
-            .fold(Vec::new(), |mut acc, chunk| -> FutureResult<Vec<u8>, APIError> {
-                acc.extend_from_slice(&*chunk);
-                ok(acc)
-            })
-            .and_then(|v| {
-                conv_result(String::from_utf8(v))
-            })
-            .and_then(|s| {
-                conv_result(serde_json::from_str::<SearchQuery>(&s))
-            })
-            .then(|result| {
-                ok(match result {
-                    Ok(s) => response
-                                .with_status(StatusCode::Ok)
-                                .with_header(ContentLength(2 as u64))
-                                .with_body("OK"),
-                    Err(e) => response
-                                .with_status(StatusCode::InternalServerError)
-                                .with_header(ContentLength(e.description().len() as u64))
-                                .with_body(e.description().to_string()),
-                })
-            });
-
-        Box::new(task)
-
-        /*
-        match (req.method(), req.path()) {
-            (Method::Get, "/image") => {
-                response.set_status(StatusCode::Ok);
-                response.set_body(req.body());
-            },
-            /*
+        // TODO : @HACK, we shouldn't have to box task1
+        let task1: Box<Future<Item=Self::Response, Error=APIError>> = match (req.method(), req.path()) {
             (Method::Get, "/search") => {
-            },
-            (Method::Post, "/image") => {
-            }
-            (Method::Get, "/tag_queue") => {
-            }
-            */
-            _ => {
-                response.set_status(StatusCode::NotFound);
-            },
-        }
+                Box::new(req_to_json::<SearchQuery>(req)
+                    .and_then(move |query| {
+                        // TODO : pool db connections
+                        // TODO : honestly just learn diesel
+                        match backend::TifariDb::new_from_cfg(cfg) {
+                            Ok(db) => Ok((query, db)),
+                            Err(e) => Err(APIError::from(e)),
+                       }
+                    })
+                    .and_then(|(query, db)| {
+                         conv_result(db.search(&query.tags, query.offset, query.max))
+                    })
+                    .and_then(|images| {
+                        conv_result(serde_json::to_string(&SearchResult { results: images }))
+                    })
+                    .and_then(|payload| {
+                        let response = Self::Response::new()
+                            .with_status(StatusCode::Ok)
+                            .with_header(ContentLength(payload.len() as u64))
+                            .with_body(payload);
 
-    */
-  //      Box::new(futures::future::ok(response))
+                        ok(response)
+                }))
+            }
+            _ => {
+                Box::new(ok(Self::Response::new().with_status(StatusCode::NotFound)))
+            },
+        };
+        
+        let finalized = task1.then(|result: Result<Self::Response, APIError>| {
+            ok(match result {
+                Ok(resp) => resp,
+                Err(e) => Self::Response::new()
+                    .with_status(StatusCode::InternalServerError)
+                    .with_header(ContentLength(e.description().len() as u64))
+                    .with_body(e.description().to_string()),
+            })
+        });
+
+        Box::new(finalized)
     }
 }
 
-fn main() {
-
-    let cfg = backend::TifariConfig::new(
+fn get_cfg() -> backend::TifariConfig{
+    backend::TifariConfig::new(
         backend::DbOpenType::FromPath("db.sqlite".to_string()),
-        "images".to_string());
+        "images".to_string())
+}
 
-    let backend = backend::TifariBackend::new(cfg).unwrap();
+fn setup_test_db() {
+    let mut db = backend::TifariDb::new_from_cfg(get_cfg()).unwrap();
+    let boat1 = "boat1.jpg".to_string();
+    let boat2 = "boat2.jpg".to_string();
+    let boat3 = "boat3.jpg".to_string();
+    let boat4 = "boat4.jpg".to_string();
 
+    let boat_tag = "boat".to_string();
+    let spec_tag = "special".to_string();
+
+    db.try_insert_image(&boat1).unwrap();
+    db.try_insert_image(&boat2).unwrap();
+    db.try_insert_image(&boat3).unwrap();
+    db.try_insert_image(&boat4).unwrap();
+
+    db.give_tag(&boat1, &boat_tag).unwrap();
+    db.give_tag(&boat2, &boat_tag).unwrap();
+    db.give_tag(&boat3, &boat_tag).unwrap();
+    db.give_tag(&boat4, &boat_tag).unwrap();
+
+    db.give_tag(&boat1, &spec_tag).unwrap();
+    db.give_tag(&boat2, &spec_tag).unwrap();
+}
+
+fn main() {
+    //setup_test_db();
     let addr = "127.0.0.1:8001".parse().unwrap();
-    let server = Http::new().bind(&addr, move || Ok(Search {backend: &backend})).unwrap();
+    let server = Http::new().bind(&addr, || { 
+        Ok(Search{ config: get_cfg() })
+    }).unwrap();
     server.run().unwrap();
 }
