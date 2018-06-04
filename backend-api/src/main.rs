@@ -3,16 +3,17 @@ extern crate hyper;
 extern crate futures;
 
 #[macro_use]
-extern crate serde_derive;
-
-extern crate serde;
-#[macro_use]
 extern crate serde_json;
+#[macro_use]
+extern crate serde_derive;
+extern crate serde;
+
+extern crate models;
 
 use futures::future::{FutureResult, ok, err};
 use futures::{Future, Stream, IntoFuture};
 
-use hyper::header::ContentLength;
+use hyper::header::{AccessControlAllowOrigin, AccessControlAllowMethods, ContentLength};
 use hyper::server::{Service, Request, Response, Http};
 use hyper::{Method, StatusCode};
 use std::error::Error;
@@ -22,18 +23,6 @@ use self::error::*;
 
 struct Search {
     config: backend::TifariConfig,
-}
-
-#[derive(Deserialize)]
-struct SearchQuery {
-    tags: Vec<String>,
-    offset: usize,
-    max: usize
-}
-
-#[derive(Serialize)]
-struct SearchResult {
-    results: Vec<backend::Image>
 }
 
 fn conv_result<T, EIn, EOut: From<EIn>>(what: Result<T, EIn>) -> Result<T, EOut> {
@@ -65,13 +54,14 @@ impl Service for Search {
 
 
     fn call(&self, req: Request) -> Self::Future {
+        println!("Received request.");
         // TODO: @HACK cloning the config with each request is horrible
         let cfg = self.config.clone();
 
         // TODO : @HACK, we shouldn't have to box task1
         let task1: Box<Future<Item=Self::Response, Error=APIError>> = match (req.method(), req.path()) {
-            (Method::Get, "/search") => {
-                Box::new(req_to_json::<SearchQuery>(req)
+            (Method::Post, "/search") => {
+                Box::new(req_to_json::<models::SearchQuery>(req)
                     .and_then(move |query| {
                         // TODO : pool db connections
                         // TODO : honestly just learn diesel
@@ -81,10 +71,10 @@ impl Service for Search {
                        }
                     })
                     .and_then(|(query, db)| {
-                         conv_result(db.search(&query.tags, query.offset, query.max))
+                         conv_result(db.search(&query.get_tags(), query.get_offset(), query.get_max()))
                     })
                     .and_then(|images| {
-                        conv_result(serde_json::to_string(&SearchResult { results: images }))
+                        conv_result(serde_json::to_string(&models::SearchResult::new(images)))
                     })
                     .and_then(|payload| {
                         let response = Self::Response::new()
@@ -108,8 +98,12 @@ impl Service for Search {
                     .with_header(ContentLength(e.description().len() as u64))
                     .with_body(e.description().to_string()),
             })
-        });
-
+        })
+            .and_then(|req| {
+                ok(req.with_header(AccessControlAllowMethods(vec![Method::Get]))
+                   .with_header(AccessControlAllowOrigin::Any))
+                });
+        
         Box::new(finalized)
     }
 }

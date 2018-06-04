@@ -3,8 +3,7 @@ extern crate rusqlite;
 extern crate notify;
 extern crate walkdir;
 extern crate chrono;
-#[macro_use]
-extern crate serde_derive;
+extern crate models;
 
 mod error;
 
@@ -43,50 +42,6 @@ pub struct TifariDb
     connection: rusqlite::Connection,
 }
 
-#[derive(Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
-pub struct Tag
-{
-    id: i64,
-    name: String,
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct Image
-{
-    id: i64,
-    path: String,
-    created_at_time : i64,
-    tags: HashSet<Tag>,
-}
-
-impl Image
-{
-    pub fn get_from_db(db: &TifariDb, id: i64) -> Result<Self>
-    {
-        let (id, path, time, tag_array_id): (i64, String, i64, i64) = db.connection.query_row(
-            "SELECT id, path, created_at_time, tags_array_table
-            FROM images 
-            WHERE id=?",
-            &[&id],
-            |row| (row.get(0), row.get(1), row.get(2), row.get(3)))?;
-
-        let mut statement = db.connection.prepare(
-            &format!("SELECT id, name 
-                     FROM tags
-                     WHERE id IN (SELECT tag_id from tags_array_table_{})", tag_array_id))?;
-
-        let mut tags = HashSet::new();
-
-        for result in statement.query_map(&[], |row| (row.get(0), row.get(1)))?
-        {
-            let (tag_id, tag_name) = result?;
-            tags.insert(Tag{id: tag_id, name: tag_name});
-        }
-
-        Ok(Image { id, path, created_at_time: time, tags })
-    }
-}
-
 enum ImageThreadMessage 
 {
     Quit,
@@ -111,6 +66,32 @@ impl TifariConfig
 
 impl TifariDb 
 {
+    pub fn get_image_from_db(&self, id: i64) -> Result<models::Image>
+    {
+        let (id, path, time, tag_array_id): (i64, String, i64, i64) = self.connection.query_row(
+            "SELECT id, path, created_at_time, tags_array_table
+            FROM images 
+            WHERE id=?",
+            &[&id],
+            |row| (row.get(0), row.get(1), row.get(2), row.get(3)))?;
+
+        let mut statement = self.connection.prepare(
+            &format!("SELECT id, name 
+                     FROM tags
+                     WHERE id IN (SELECT tag_id from tags_array_table_{})", tag_array_id))?;
+
+        let mut tags = HashSet::new();
+
+        for result in statement.query_map(&[], |row| (row.get(0), row.get(1)))?
+        {
+            let (tag_id, tag_name) = result?;
+            tags.insert(models::Tag::new(tag_id, tag_name));
+        }
+
+        Ok(models::Image::new(id, path, time, tags))
+    }
+
+
     pub fn rename_image(&mut self, from: &String, to: &String) -> Result<()>
     {
         let tx = self.connection.transaction()?;
@@ -406,7 +387,7 @@ impl TifariDb
 
     pub fn search(&self, 
                   tags: &Vec<String>, 
-                  offset: usize, max_results: usize) -> Result<Vec<Image>>
+                  offset: usize, max_results: usize) -> Result<Vec<models::Image>>
     {
         if 0 >= tags.len()
         {
@@ -473,7 +454,7 @@ impl TifariDb
             {
                 if skipped >= offset
                 {
-                    results.push(Image::get_from_db(self, image_id)?);
+                    results.push(self.get_image_from_db(image_id)?);
                     if results.len() >= max_results
                     {
                         break;
