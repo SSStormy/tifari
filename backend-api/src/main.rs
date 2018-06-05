@@ -63,36 +63,46 @@ impl Service for Search {
 
         // TODO : @HACK, we shouldn't have to box task1
         let task1: Box<Future<Item=Self::Response, Error=APIError>> = match (req.method(), req.path()) {
-            (Method::Get, "/api/tag_queue") => {
-                Box::new(req.body()
-                    .map_err(APIError::Hyper)
-                    .concat2() // TODO : type mismatch if no concat2. investigate.
-                    .and_then(move |_| {
-                        match backend::TifariDb::new_from_cfg(&cfg) {
-                            Ok(db) => Ok(db),
-                            Err(e) => Err(APIError::from(e)),
-                        }
-                    })
-                    .and_then(|db| {
-                        conv_result(db.get_tag_queue())
-                    })
-                    .and_then(|result| {
-                        conv_result(serde_json::to_string(&models::SearchResult::new(result)))
-                    })
-                    .and_then(|payload| {
-                        let response = Self::Response::new()
-                            .with_status(StatusCode::Ok)
-                            .with_header(ContentLength(payload.len() as u64))
-                            .with_body(payload);
+            
+            (Method::Get, "/api/reload") => {
 
-                        ok(response)
-                    })
-                )
+                let get_response = || {
+                    let db = backend::TifariDb::new(cfg.clone())?;
+                    db.reload_root();
+
+                    let payload = "{\"status\": 200}";
+                    let response = Self::Response::new() 
+                        .with_status(StatusCode::Ok)
+                        .with_header(ContentLength(payload.len() as u64))
+                        .with_body(payload);
+
+                    Ok(response)
+                };
+
+                Box::new(FutureResult::from(get_response()))
+            },
+            
+            (Method::Get, "/api/tag_queue") => {
+
+                let get_response = || {
+                    let db = backend::TifariDb::new(cfg.clone())?;
+                    let queue = db.get_tag_queue()?;
+                    let payload = serde_json::to_string(&models::SearchResult::new(queue))?;
+
+                    let response = Self::Response::new() 
+                        .with_status(StatusCode::Ok)
+                        .with_header(ContentLength(payload.len() as u64))
+                        .with_body(payload);
+
+                    Ok(response)
+                };
+
+                Box::new(FutureResult::from(get_response()))
             },
             (Method::Post, "/api/search") => {
                 Box::new(req_to_json::<models::SearchQuery>(req)
                     .and_then(move |query| {
-                        match backend::TifariDb::new_from_cfg(&cfg) {
+                        match backend::TifariDb::new(cfg) {
                             Ok(db) => Ok((query, db)),
                             Err(e) => Err(APIError::from(e)),
                        }
@@ -115,13 +125,16 @@ impl Service for Search {
             (_, _) => {
                 println!("Redirecting to staticfile.");
 
-                Box::new(self.staticfile.call(req)
-                .then(|result: Result<hyper::Response, hyper::Error>| {
-                    match result {
-                        Ok(resp) => ok(resp),
-                        Err(e) => err(APIError::from(e)),
-                    }
-                }))
+                let result = self.staticfile
+                    .call(req)
+                    .then(|result: Result<hyper::Response, hyper::Error>| {
+                        match result {
+                            Ok(resp) => ok(resp),
+                            Err(e) => err(APIError::from(e)),
+                        }
+                    });
+
+                Box::new(result)
             },
         };
         
@@ -151,8 +164,9 @@ fn get_cfg() -> backend::TifariConfig {
 
 fn main() {
     let addr = "127.0.0.1:8001".parse().unwrap();
+    let db = backend::TifariDb::new(get_cfg()).unwrap();
 
-    let backend = backend::TifariBackend::new(get_cfg()).unwrap();
+    db.reload_root();
 
     let server = Http::new().bind(&addr, || { 
         let cfg = get_cfg();

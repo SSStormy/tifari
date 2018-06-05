@@ -15,57 +15,27 @@ pub use self::error::*;
 use std::collections::HashSet;
 
 #[derive(Clone, Deserialize, Serialize)]
-pub enum DbOpenType
-{
-    FromPath(String),
-    InMemory
-}
-
-#[derive(Clone, Deserialize, Serialize)]
 pub struct TifariConfig 
 {
-    db_type: DbOpenType,
+    db_root : String,
     image_root: String,
 }
 
 impl TifariConfig 
 {
-    pub fn new(db_type: DbOpenType, image_root: String) -> TifariConfig
+    pub fn new(db_root: String, image_root: String) -> TifariConfig
     {
-        TifariConfig { db_type, image_root }
+        TifariConfig { db_root, image_root }
     }
 
     pub fn get_root(&self) -> &String { &self.image_root }
-    pub fn get_db_type(&self) -> &DbOpenType { &self.db_type }
-}
-
-
-pub struct TifariBackend 
-{
-    config: TifariConfig,
-    db: TifariDb,
-
-    tag_thread: Option<std::thread::JoinHandle<()>>,
-    tag_thread_comms: std::sync::mpsc::Sender<TagThreadMessage>,
+    pub fn get_db_root(&self) -> &String{ &self.db_root }
 }
 
 pub struct TifariDb
 {
+    config: Option<TifariConfig>,
     connection: rusqlite::Connection,
-}
-
-enum ImageThreadMessage 
-{
-    Quit,
-}
-
-#[derive(Debug)]
-enum TagThreadMessage
-{
-    Rename(String, String),
-    TryAdd(String),
-    TryRemove(String),
-    Quit,
 }
 
 impl TifariDb 
@@ -251,44 +221,50 @@ impl TifariDb
         Ok(())
     }
 
-    pub fn new_from_cfg(config: &TifariConfig) -> Result<Self> 
-    {
-        TifariDb::new(config.db_type.clone())
+    fn setup_tables(&self) -> Result<()> {
+        self.connection.execute_batch("
+            BEGIN;
+
+            CREATE TABLE IF NOT EXISTS tags (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    name TEXT NOT NULL,
+                    image_ids_array_table INTEGER,
+                    UNIQUE(id, name, image_ids_array_table));
+
+            CREATE TABLE IF NOT EXISTS images (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    path TEXT NOT NULL,
+                    tags_array_table INTEGER,
+                    created_at_time INTEGER NOT NULL,
+                    UNIQUE(id, path, tags_array_table));
+
+            CREATE TABLE IF NOT EXISTS tag_queue (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    image_id INTEGER NOT NULL,
+                    UNIQUE(id, image_id));
+
+            COMMIT;
+        ")?;
+
+        Ok(())
     }
 
-    pub fn new(db_type: DbOpenType) -> Result<Self>
+    pub fn new(cfg: TifariConfig) -> Result<Self> 
     {
-        let connection = match db_type 
-        {
-            DbOpenType::FromPath(db_path) => rusqlite::Connection::open(db_path)?,
-            DbOpenType::InMemory => rusqlite::Connection::open_in_memory()?,
-        };
+        println!("nah");
 
-        let db = TifariDb { connection };
+        let conn = rusqlite::Connection::open(cfg.get_db_root())?;
+        let db = TifariDb { config: Some(cfg), connection: conn }; 
 
-        db.connection.execute_batch("
-                BEGIN;
+        db.setup_tables()?;
+        Ok(db)
+    }
 
-                CREATE TABLE IF NOT EXISTS tags (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-                        name TEXT NOT NULL,
-                        image_ids_array_table INTEGER,
-                        UNIQUE(id, name, image_ids_array_table));
-
-                CREATE TABLE IF NOT EXISTS images (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-                        path TEXT NOT NULL,
-                        tags_array_table INTEGER,
-                        created_at_time INTEGER NOT NULL,
-                        UNIQUE(id, path, tags_array_table));
-
-                CREATE TABLE IF NOT EXISTS tag_queue (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-                        image_id INTEGER NOT NULL,
-                        UNIQUE(id, image_id));
-
-                COMMIT;
-            ")?;
+    pub fn new_in_memory() -> Result<Self>
+    {
+        let conn = rusqlite::Connection::open_in_memory()?;
+        let db = TifariDb { config: None, connection: conn }; 
+        db.setup_tables()?;
 
         Ok(db)
     }
@@ -495,105 +471,48 @@ impl TifariDb
 
         Ok(results)
     }
-}
 
-impl TifariBackend 
-{
-    pub fn new(config: TifariConfig) -> Result<Self> 
-    {
-        let db = TifariDb::new(config.db_type.clone())?;
+    pub fn reload_root(&self) {
+        match &self.config {
+            Some(cfg) => {
+                let path = cfg.get_root();
 
-        std::fs::create_dir_all(config.image_root.clone())?;
-        let (tag_sender, tag_receiver) = std::sync::mpsc::channel();
+                use std::io;
+                use std::fs::{self, DirEntry};
+                use std::path::Path;
 
-        let db_type = config.db_type.clone();
-        let tag_thread = std::thread::spawn(move || {
-            tag_thread_main(db_type, tag_receiver)
-        });
-        
-        use std::io;
-        use std::fs::{self, DirEntry};
-        use std::path::Path;
+                println!("Starting root scan at {}", path);
 
-        println!("Starting root scan at {}", config.get_root());
-
-        // confg.get_root() must be absolute
-        for entry in fs::read_dir(config.get_root()).unwrap()
-        {
-            let entry = match entry {
-                Ok(e) => e,
-                Err(e) => { 
-                    println!("Error in initial root scan: {:?}", e);
-                    continue;
-                }
-            };
-
-            let data = match entry.metadata() {
-                Ok(e) => e,
-                Err(e) => {
-                    println!("Error in initial root scan: {:?}", e);
-                    continue;
-                }
-            };
-
-            if data.is_file() {
-                let path = entry.path().file_name().unwrap().to_string_lossy().to_string();
-                println!("Found initial file: {:?}", path);
-                tag_sender.send(TagThreadMessage::TryAdd(path)).unwrap();
-            }
-        }
-
-        println!("Done.");
-
-        Ok(TifariBackend { config, db, 
-            tag_thread: Some(tag_thread), tag_thread_comms: tag_sender
-        })
-    }
-}
-
-fn tag_thread_main(db_open: DbOpenType,
-                   receiver: std::sync::mpsc::Receiver<TagThreadMessage>) 
-{
-    let mut db = TifariDb::new(db_open).unwrap();
-
-
-    for recv in receiver.iter()
-    {
-        println!("[tag_thread] Received: {:?}", recv);
-        match recv
-        {
-            TagThreadMessage::TryAdd(path) =>
-            {
-                if let Err(e) = db.try_insert_image(&path)
+                // TODO : gather list of stuff that is in db and on file, operate on that.
+                // confg.get_root() must be absolute
+                for entry in fs::read_dir(path).unwrap()
                 {
-                    println!("[tag_thread] Error in TryAdd: {:?}", e);
+                    let entry = match entry {
+                        Ok(e) => e,
+                        Err(e) => { 
+                            println!("Error in initial root scan: {:?}", e);
+                            continue;
+                        }
+                    };
+
+                    let data = match entry.metadata() {
+                        Ok(e) => e,
+                        Err(e) => {
+                            println!("Error in initial root scan: {:?}", e);
+                            continue;
+                        }
+                    };
+
+                    if data.is_file() {
+                        let path = entry.path().file_name().unwrap().to_string_lossy().to_string();
+                        println!("Found initial file: {:?}", path);
+                    }
                 }
+
+                println!("Done.");
             }
-            TagThreadMessage::TryRemove(path) =>
-            {
-                if let Err(e) = db.erase_image(&path)
-                {
-                    println!("[tag_thread] Error in TryRemove: {:?}", e);
-                }
-            }
-            TagThreadMessage::Rename(from, to) =>
-            {
-                if let Err(e) = db.rename_image(&from, &to)
-                {
-                    println!("[tag_thread] Error in Rename: {:?}", e);
-                }
-            }
-            TagThreadMessage::Quit => break,
+            None => ()
         };
-    }
-}
-
-impl Drop for TifariBackend 
-{
-    fn drop(&mut self) 
-    {
-        self.tag_thread_comms.send(TagThreadMessage::Quit).unwrap();
-        if let Some(tag_thread) = self.tag_thread.take() { tag_thread.join().unwrap(); }
     }
 }
 
@@ -604,7 +523,7 @@ mod tests {
     #[test]
     fn db_image_insertion()
     {
-        let mut db = TifariDb::new(DbOpenType::InMemory).unwrap();
+        let mut db = TifariDb::new_in_memory().unwrap();
         db.try_insert_image(&"test/img.png".to_string()).unwrap();
         assert!(db.try_insert_image(&"test/img.png".to_string()) .is_err());
     }
@@ -612,7 +531,7 @@ mod tests {
     #[test]
     fn db_image_erase()
     {
-        let mut db = TifariDb::new(DbOpenType::InMemory).unwrap();
+        let mut db = TifariDb::new_in_memory().unwrap();
         let img = "test/img.png".to_string();
 
         assert!(db.erase_image(&img).is_err());
@@ -624,7 +543,7 @@ mod tests {
     #[test]
     fn db_image_rename()
     {
-        let mut db = TifariDb::new(DbOpenType::InMemory).unwrap();
+        let mut db = TifariDb::new_in_memory().unwrap();
         let from = "test/img.png".to_string();
         let to = "test/img2.png".to_string();
 
@@ -641,7 +560,7 @@ mod tests {
     #[test]
     fn db_image_tag()
     {
-        let mut db = TifariDb::new(DbOpenType::InMemory).unwrap();
+        let mut db = TifariDb::new_in_memory().unwrap();
         let img = "test/img.png".to_string();
 
         let tag1 = "tag_1".to_string();
@@ -670,7 +589,7 @@ mod tests {
     #[test]
     fn db_duplicate_tags()
     {
-        let mut db = TifariDb::new(DbOpenType::InMemory).unwrap();
+        let mut db = TifariDb::new_in_memory().unwrap();
         let img = "test/img.png".to_string();
 
         let tag1 = "tag_1".to_string();
@@ -686,7 +605,7 @@ mod tests {
     #[test]
     fn db_tag_queue() 
     {
-        let mut db = TifariDb::new(DbOpenType::InMemory).unwrap();
+        let mut db = TifariDb::new_in_memory().unwrap();
         let img1 = "test/img1.png".to_string();
         let img2 = "test/img2.png".to_string();
 
@@ -723,7 +642,7 @@ mod tests {
     #[test]
     fn db_search()
     {
-        let mut db = TifariDb::new(DbOpenType::InMemory).unwrap();
+        let mut db = TifariDb::new_in_memory().unwrap();
         let img1 = "test/img.png".to_string();
         let img2 = "test/img2.png".to_string();
         let img3 = "test/img3.png".to_string();
@@ -779,29 +698,29 @@ mod tests {
             {
                 let img = format!("test/img_iter{}.png", i);
                 db.try_insert_image(&img).unwrap();
-                db.give_tag(&img, &tag4);
+                db.give_tag(&img, &tag4).unwrap();
             }
 
             let after_10 = "special_img10".to_string();
             db.try_insert_image(&after_10).unwrap();
-            db.give_tag(&after_10, &tag4);
+            db.give_tag(&after_10, &tag4).unwrap();
 
             for i in 10..15
             {
                 let img = format!("test/img_iter{}.png", i);
                 db.try_insert_image(&img).unwrap();
-                db.give_tag(&img, &tag4);
+                db.give_tag(&img, &tag4).unwrap();
             }
 
             let after_15 = "special_img15".to_string();
             db.try_insert_image(&after_15).unwrap();
-            db.give_tag(&after_15, &tag4);
+            db.give_tag(&after_15, &tag4).unwrap();
 
             for i in 15..20
             {
                 let img = format!("test/img_iter{}.png", i);
                 db.try_insert_image(&img).unwrap();
-                db.give_tag(&img, &tag4);
+                db.give_tag(&img, &tag4).unwrap();
             }
 
             {
