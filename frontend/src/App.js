@@ -22,6 +22,7 @@ class App extends Component {
         this.hideEditorSidebar= this.hideEditorSidebar.bind(this);
         this.escKeyListener = this.escKeyListener.bind(this);
         this.viewToBeTaggedList = this.viewToBeTaggedList.bind(this);
+        this.mapSelectedImages = this.mapSelectedImages.bind(this);
     }
 
     hideEditorSidebar() {
@@ -50,24 +51,23 @@ class App extends Component {
         });
     }
 
+    mapSelectedImages(images) {
+        let mappedImages = images.results.map(img => 
+            <ImageSlot img={img} key={img.id} onClick={() => this.onSelectImage(img)}/>);
+        this.setState({queriedImages: mappedImages});
+    }
+
     requeryImages(tagsArray) {
-        TifariAPI.search(tagsArray)
-            .then(data => {
-                let mappedImages = data.results.map(img => 
-                    <ImageSlot img={img} key={img.id} onClick={() => this.onSelectImage(img)}/>);
-                this.setState({queriedImages: mappedImages});
-            });
+        TifariAPI.search(tagsArray).then(this.mapSelectedImages);
+    }
+
+    viewToBeTaggedList() {
+        TifariAPI.getToBeTaggedList().then(this.mapSelectedImages);
     }
 
     onSearch(query) {
         let tags = query.split(" ");
         this.requeryImages(tags);
-    }
-
-    viewToBeTaggedList() {
-        this.setState({
-            queriedImages: TifariAPI.getToBeTaggedList()
-        });
     }
 
     render() {

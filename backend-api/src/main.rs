@@ -63,12 +63,36 @@ impl Service for Search {
 
         // TODO : @HACK, we shouldn't have to box task1
         let task1: Box<Future<Item=Self::Response, Error=APIError>> = match (req.method(), req.path()) {
-            (Method::Post, "/search") => {
+            (Method::Get, "/api/tag_queue") => {
+                Box::new(req.body()
+                    .map_err(APIError::Hyper)
+                    .concat2() // TODO : type mismatch if no concat2. investigate.
+                    .and_then(move |_| {
+                        match backend::TifariDb::new_from_cfg(&cfg) {
+                            Ok(db) => Ok(db),
+                            Err(e) => Err(APIError::from(e)),
+                        }
+                    })
+                    .and_then(|db| {
+                        conv_result(db.get_tag_queue())
+                    })
+                    .and_then(|result| {
+                        conv_result(serde_json::to_string(&models::SearchResult::new(result)))
+                    })
+                    .and_then(|payload| {
+                        let response = Self::Response::new()
+                            .with_status(StatusCode::Ok)
+                            .with_header(ContentLength(payload.len() as u64))
+                            .with_body(payload);
+
+                        ok(response)
+                    })
+                )
+            },
+            (Method::Post, "/api/search") => {
                 Box::new(req_to_json::<models::SearchQuery>(req)
                     .and_then(move |query| {
-                        // TODO : pool db connections
-                        // TODO : honestly just learn diesel
-                        match backend::TifariDb::new_from_cfg(cfg) {
+                        match backend::TifariDb::new_from_cfg(&cfg) {
                             Ok(db) => Ok((query, db)),
                             Err(e) => Err(APIError::from(e)),
                        }
@@ -127,6 +151,8 @@ fn get_cfg() -> backend::TifariConfig {
 
 fn main() {
     let addr = "127.0.0.1:8001".parse().unwrap();
+
+    let backend = backend::TifariBackend::new(get_cfg()).unwrap();
 
     let server = Http::new().bind(&addr, || { 
         let cfg = get_cfg();

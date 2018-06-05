@@ -34,6 +34,9 @@ impl Image {
     pub fn new(id: i64, path: String, created_at_time: i64, tags: HashSet<Tag>) -> Self {
         Image { id, path, created_at_time, tags }
     }
+    pub fn new_no_tags(id: i64, path: String, created_at_time: i64) -> Self {
+        Image { id, path, created_at_time, tags: HashSet::new() }
+    }
 
     pub fn get_id(&self) -> i64 { self.id }
     pub fn get_path(&self) -> &String { &self.path }

@@ -1,7 +1,6 @@
 #![feature(try_trait)]
 extern crate rusqlite;
 extern crate notify;
-extern crate walkdir;
 extern crate chrono;
 extern crate models;
 extern crate serde;
@@ -45,9 +44,6 @@ pub struct TifariBackend
 {
     config: TifariConfig,
     db: TifariDb,
-
-    scan_thread: Option<std::thread::JoinHandle<()>>,
-    scan_thread_comms: std::sync::mpsc::Sender<ImageThreadMessage>,
 
     tag_thread: Option<std::thread::JoinHandle<()>>,
     tag_thread_comms: std::sync::mpsc::Sender<TagThreadMessage>,
@@ -255,7 +251,7 @@ impl TifariDb
         Ok(())
     }
 
-    pub fn new_from_cfg(config: TifariConfig) -> Result<Self> 
+    pub fn new_from_cfg(config: &TifariConfig) -> Result<Self> 
     {
         TifariDb::new(config.db_type.clone())
     }
@@ -393,6 +389,28 @@ impl TifariDb
         Ok(())
     }
 
+    pub fn get_tag_queue(&self) -> Result<Vec<models::Image>> 
+    {
+        let mut statement = self.connection.prepare(
+            "SELECT id, path, created_at_time
+            FROM images
+            WHERE id IN (SELECT image_id 
+                        FROM tag_queue)
+            ORDER BY id DESC"
+            )?;
+
+        let mut results = vec![];
+        for result in statement.query_map(&[], |row| (row.get(0), row.get(1), row.get(2)))?
+        {
+            let result = result?;
+            let (id, path, created_at_time) = (result.0, result.1, result.2);
+
+            results.push(models::Image::new_no_tags(id, path, created_at_time));
+        }
+
+        Ok(results)
+    }
+
     pub fn search(&self, 
                   tags: &Vec<String>, 
                   offset: usize, max_results: usize) -> Result<Vec<models::Image>>
@@ -486,23 +504,48 @@ impl TifariBackend
         let db = TifariDb::new(config.db_type.clone())?;
 
         std::fs::create_dir_all(config.image_root.clone())?;
-        let (scan_sender, scan_receiver) = std::sync::mpsc::channel();
         let (tag_sender, tag_receiver) = std::sync::mpsc::channel();
-        let tag_sender_scan_thread = tag_sender.clone();
-
-        let path = config.image_root.clone();
-        let scan_thread = std::thread::spawn(move || { 
-            scan_thread_main(path, scan_receiver, tag_sender_scan_thread); 
-        });
-
 
         let db_type = config.db_type.clone();
         let tag_thread = std::thread::spawn(move || {
             tag_thread_main(db_type, tag_receiver)
         });
+        
+        use std::io;
+        use std::fs::{self, DirEntry};
+        use std::path::Path;
+
+        println!("Starting root scan at {}", config.get_root());
+
+        // TODO : shit's broke
+        for entry in fs::read_dir(config.get_root()).unwrap()
+        {
+            let entry = match entry {
+                Ok(e) => e,
+                Err(e) => { 
+                    println!("Error in initial root scan: {:?}", e);
+                    continue;
+                }
+            };
+
+            let data = match entry.metadata() {
+                Ok(e) => e,
+                Err(e) => {
+                    println!("Error in initial root scan: {:?}", e);
+                    continue;
+                }
+            };
+
+            if data.is_file() {
+                let path = entry.path().to_string_lossy().to_string();
+                println!("Found initial file: {:?}", path);
+                tag_sender.send(TagThreadMessage::TryAdd(path)).unwrap();
+            }
+        }
+
+        println!("Done.");
 
         Ok(TifariBackend { config, db, 
-            scan_thread: Some(scan_thread), scan_thread_comms: scan_sender, 
             tag_thread: Some(tag_thread), tag_thread_comms: tag_sender
         })
     }
@@ -544,83 +587,10 @@ fn tag_thread_main(db_open: DbOpenType,
     }
 }
 
-fn scan_thread_main(path: String, 
-                    receiver: std::sync::mpsc::Receiver<ImageThreadMessage>,
-                    tag_producer: std::sync::mpsc::Sender<TagThreadMessage>)
-{
-    use walkdir::WalkDir;
-    use notify::Watcher;
-
-    for entry in WalkDir::new(path.clone()).follow_links(true) 
-    {
-        let entry = match entry 
-        {
-            Ok(entry) => {
-                if !entry.file_type().is_file() { continue; }
-                entry
-            }
-            Err(err) => 
-            {
-                println!("[scan_thread_init] Failed to recursively acquire entry. Error: {:?}", err);
-                continue;
-            }
-        };
-
-        tag_producer.send(TagThreadMessage::TryAdd(entry.path().to_str().unwrap().to_string())).unwrap();
-    }
-
-    let (watch_prod, watch_recv) = std::sync::mpsc::channel();
-
-    let mut watcher = notify::watcher(watch_prod, std::time::Duration::from_millis(500)).unwrap();
-    watcher.watch(path.clone(), notify::RecursiveMode::Recursive).unwrap();
-
-    loop 
-    {
-        match receiver.try_recv()
-        {
-            Ok(val) => match val 
-            {
-                ImageThreadMessage::Quit => break,
-            }
-            Err(e) => println!("[scan_thread_loop] Failed to receive message. Error: {:?}", e),
-        };
-
-        for recv in watch_recv.try_iter()
-        {
-            use notify::DebouncedEvent::*;
-            let msg = match recv 
-            {
-                NoticeWrite(path) => Some(TagThreadMessage::TryAdd(path.to_string_lossy().to_string())),
-                NoticeRemove(path) => Some(TagThreadMessage::TryRemove(path.to_string_lossy().to_string())),
-                Create(path) => Some(TagThreadMessage::TryAdd(path.to_string_lossy().to_string())),
-                Write(path) => Some(TagThreadMessage::TryAdd(path.to_string_lossy().to_string())),
-                Chmod(path) => { println!("[scan_thread] Chmod at path {:?}", path); None },
-                Remove(path) => Some(TagThreadMessage::TryRemove(path.to_string_lossy().to_string())),
-                Rename(from, to) => Some(TagThreadMessage::Rename(from.to_string_lossy().to_string(), to.to_string_lossy().to_string())),
-                Rescan => { println!("[scan_thread] Watch rescan."); None },
-                Error(error, opt_buf) => { println!("[scan_thread] Debounced event error {:?} at path {:?}", error, opt_buf); None },
-
-            };
-
-            match msg 
-            {
-                Some(msg) => { tag_producer.send(msg).unwrap(); },
-                None => (),
-            };
-        }
-
-         std::thread::sleep(std::time::Duration::from_millis(500));
-    }
-}
-
 impl Drop for TifariBackend 
 {
     fn drop(&mut self) 
     {
-        self.scan_thread_comms.send(ImageThreadMessage::Quit).unwrap();
-        if let Some(scan_thread) = self.scan_thread.take() { scan_thread.join().unwrap(); }
-
-
         self.tag_thread_comms.send(TagThreadMessage::Quit).unwrap();
         if let Some(tag_thread) = self.tag_thread.take() { tag_thread.join().unwrap(); }
     }
@@ -713,6 +683,43 @@ mod tests {
     }
 
     #[test]
+    fn db_tag_queue() 
+    {
+        let mut db = TifariDb::new(DbOpenType::InMemory).unwrap();
+        let img1 = "test/img1.png".to_string();
+        let img2 = "test/img2.png".to_string();
+
+        let tag1 = "tag_1".to_string();
+
+        assert_eq!(db.get_tag_queue().unwrap().len(), 0);
+
+        db.try_insert_image(&img1).unwrap();
+        {
+            let queue = db.get_tag_queue().unwrap();
+            assert_eq!(queue.len(), 1);
+            assert_eq!(queue[0].get_path(), &img1);
+        }
+
+        db.try_insert_image(&img2).unwrap();
+        {
+            let queue = db.get_tag_queue().unwrap();
+            assert_eq!(queue.len(), 2);
+            assert_eq!(queue[0].get_path(), &img2);
+            assert_eq!(queue[1].get_path(), &img1);
+        }
+
+        db.give_tag(&img1, &tag1).unwrap();
+        {
+            let queue = db.get_tag_queue().unwrap();
+            assert_eq!(queue.len(), 1);
+            assert_eq!(queue[0].get_path(), &img2);
+        }
+
+        db.give_tag(&img2, &tag1).unwrap();
+        assert_eq!(db.get_tag_queue().unwrap().len(), 0);
+    }
+
+    #[test]
     fn db_search()
     {
         let mut db = TifariDb::new(DbOpenType::InMemory).unwrap();
@@ -731,15 +738,15 @@ mod tests {
         db.give_tag(&img2, &tag2).unwrap();
 
         {
-            let results = db.search(&vec![&tag1], 0, 50).unwrap();
+            let results = db.search(&vec![tag1.clone()], 0, 50).unwrap();
             assert_eq!(results.len(), 1);
-            assert_eq!(results[0].path, img1);
+            assert_eq!(results[0].get_path(), &img1);
         }
 
         {
-            let results = db.search(&vec![&tag2], 0, 50).unwrap();
+            let results = db.search(&vec![tag2.clone()], 0, 50).unwrap();
             assert_eq!(results.len(), 1);
-            assert_eq!(results[0].path, img2);
+            assert_eq!(results[0].get_path(), &img2);
         }
 
         db.try_insert_image(&img3).unwrap();
@@ -747,21 +754,21 @@ mod tests {
         db.give_tag(&img3, &tag3).unwrap();
 
         {
-            let results = db.search(&vec![&tag2], 0, 50).unwrap();
+            let results = db.search(&vec![tag2.clone()], 0, 50).unwrap();
             assert_eq!(results.len(), 2);
 
-            assert_eq!(results[0].path, img2);
-            assert_eq!(results[1].path, img1);
+            assert_eq!(results[0].get_path(), &img2);
+            assert_eq!(results[1].get_path(), &img1);
         }
 
         db.give_tag(&img3, &tag1).unwrap();
 
         {
-            let results = db.search(&vec![&tag1], 0, 50).unwrap();
+            let results = db.search(&vec![tag1.clone()], 0, 50).unwrap();
             assert_eq!(results.len(), 2);
 
-            assert_eq!(results[0].path, img3);
-            assert_eq!(results[1].path, img1);
+            assert_eq!(results[0].get_path(), &img3);
+            assert_eq!(results[1].get_path(), &img1);
         }
 
         {
@@ -797,27 +804,27 @@ mod tests {
             }
 
             {
-                let results = db.search(&vec![&tag4], 2, 10).unwrap();
+                let results = db.search(&vec![tag4.clone()], 2, 10).unwrap();
                 assert_eq!(results.len(), 10);
 
-                assert!(results[0].path != after_15); // 18
-                assert!(results[1].path != after_15); // 17
-                assert!(results[2].path != after_15); // 16
-                assert_eq!(results[3].path, after_15); // our guy
-                assert!(results[4].path != after_15); // 15
+                assert_ne!(results[0].get_path(), &after_15); // 18
+                assert_ne!(results[1].get_path(), &after_15); // 17
+                assert_ne!(results[2].get_path(), &after_15); // 16
+                assert_eq!(results[3].get_path(), &after_15); // our guy
+                assert_ne!(results[4].get_path(), &after_15); // 15
             }
 
             {
-                let results = db.search(&vec![&tag4], 4, 10).unwrap();
+                let results = db.search(&vec![tag4.clone()], 4, 10).unwrap();
                 assert_eq!(results.len(), 10);
 
-                assert!(results[0].path != after_15); // 16
-                assert_eq!(results[1].path, after_15); // our guy
-                assert!(results[2].path != after_15); // 15
+                assert_ne!(results[0].get_path(), &after_15); // 16
+                assert_eq!(results[1].get_path(), &after_15); // our guy
+                assert_ne!(results[2].get_path(), &after_15); // 15
 
-                assert!(results[6].path != after_10); // 11
-                assert_eq!(results[7].path, after_10); 
-                assert!(results[8].path != after_10); // 10
+                assert_ne!(results[6].get_path(), &after_10); // 11
+                assert_eq!(results[7].get_path(), &after_10); 
+                assert_ne!(results[8].get_path(), &after_10); // 10
             }
         }
     }
