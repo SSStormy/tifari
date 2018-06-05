@@ -10,17 +10,33 @@ class SearchField extends Component {
         };
 
         this.onInputChange = this.onInputChange.bind(this);
+        this.onFocus= this.onFocus.bind(this);
     }
 
     onInputChange(event) {
         const val = event.target.value.trim();
         this.props.onChange(val)
     }
+    
+    onFocus(ev) {
+        this.searchBar.focus();
+    }
+
+    componentDidMount() {
+        this.searchBar.focus();
+
+        document.addEventListener("focus", this.onFocus, false);
+    }
+
+    componentWillUnmount() {
+        document.removeEventListener("focus", this.onFocus, false);
+    }
 
     render() {
         return (
             <div>
             <input 
+                ref={(obj) => this.searchBar = obj}
                 type="text"
                 onChange={this.onInputChange}
             />

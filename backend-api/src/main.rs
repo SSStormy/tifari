@@ -10,6 +10,8 @@ extern crate serde;
 
 extern crate models;
 
+extern crate hyper_staticfile;
+
 use futures::future::{FutureResult, ok, err};
 use futures::{Future, Stream, IntoFuture};
 
@@ -23,6 +25,7 @@ use self::error::*;
 
 struct Search {
     config: backend::TifariConfig,
+    staticfile: hyper_staticfile::Static,
 }
 
 fn conv_result<T, EIn, EOut: From<EIn>>(what: Result<T, EIn>) -> Result<T, EOut> {
@@ -84,19 +87,27 @@ impl Service for Search {
 
                         ok(response)
                 }))
-            }
-            _ => {
-                Box::new(ok(Self::Response::new().with_status(StatusCode::NotFound)))
+            },
+            (_, _) => {
+                println!("Redirecting to staticfile.");
+
+                Box::new(self.staticfile.call(req)
+                .then(|result: Result<hyper::Response, hyper::Error>| {
+                    match result {
+                        Ok(resp) => ok(resp),
+                        Err(e) => err(APIError::from(e)),
+                    }
+                }))
             },
         };
         
         let finalized = task1.then(|result: Result<Self::Response, APIError>| {
             ok(match result {
                 Ok(resp) => resp,
-                Err(e) => Self::Response::new()
+                Err(e) => { println!("Error: {:?}", e); Self::Response::new()
                     .with_status(StatusCode::InternalServerError)
                     .with_header(ContentLength(e.description().len() as u64))
-                    .with_body(e.description().to_string()),
+                    .with_body(e.description().to_string()) },
             })
         })
             .and_then(|req| {
@@ -142,7 +153,12 @@ fn main() {
     //setup_test_db();
     let addr = "127.0.0.1:8001".parse().unwrap();
     let server = Http::new().bind(&addr, || { 
-        Ok(Search{ config: get_cfg() })
+        // TODO : this gets called on every fucking request
+        let cfg = get_cfg();
+        let staticfile = hyper_staticfile::Static::new(std::path::Path::new(cfg.get_root()));
+
+        let service = Search { config: cfg, staticfile };
+        Ok(service)
     }).unwrap();
     server.run().unwrap();
 }

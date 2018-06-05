@@ -62,6 +62,8 @@ impl TifariConfig
     {
         TifariConfig { db_type, image_root }
     }
+
+    pub fn get_root(&self) -> &String { &self.image_root }
 }
 
 impl TifariDb 

@@ -7,6 +7,8 @@ authors = ["Justas Dabrila <justasdabrila@gmail.com>"]
 backend = { path = "../backend", version = "*" }
 models = { path = "../models", version = "*" }
 
+hyper-staticfile = "0.2.0"
+
 hyper = "0.11.27"
 futures = "0.1.21"
 
