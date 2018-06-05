@@ -1,0 +1,20 @@
+Backend:
+    ✔ Search API @done(2018-05-30 09:36) @project(Programming / Taggable imageboard for artist reference images / Backend)
+    ✔ Server @done(2018-06-01 00:16) @project(Programming / Taggable imageboard for artist reference images / Backend)
+    ✔ Search API @done(2018-06-02 01:30) @project(Programming / Taggable imageboard for artist reference images / Backend)
+    ✔ To-be-tagged API @done(2018-06-05 21:12) @project(Programming / Taggable imageboard for artist reference images / Backend)
+    ☐ General cleanup, copy optimizations
+    ☐ Reload API
+      Compare on disk files with in database files, remove the paths that only exist in the db from the db.
+      Do this on start.
+
+Frontend:
+    Image editor
+        ☐ Close button
+        ☐ Copy button
+        ☐ Copy&close button
+        ☐ Give multiple tags in one click
+        ☐ Select many images
+
+    ✔ Search @done(2018-06-05 21:12) @project(Programming / Taggable imageboard for artist reference images / Backend / Frontend)
+    ☐ Reload files button

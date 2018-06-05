@@ -517,7 +517,7 @@ impl TifariBackend
 
         println!("Starting root scan at {}", config.get_root());
 
-        // TODO : shit's broke
+        // confg.get_root() must be absolute
         for entry in fs::read_dir(config.get_root()).unwrap()
         {
             let entry = match entry {
@@ -537,7 +537,7 @@ impl TifariBackend
             };
 
             if data.is_file() {
-                let path = entry.path().to_string_lossy().to_string();
+                let path = entry.path().file_name().unwrap().to_string_lossy().to_string();
                 println!("Found initial file: {:?}", path);
                 tag_sender.send(TagThreadMessage::TryAdd(path)).unwrap();
             }
@@ -559,6 +559,7 @@ fn tag_thread_main(db_open: DbOpenType,
 
     for recv in receiver.iter()
     {
+        println!("[tag_thread] Received: {:?}", recv);
         match recv
         {
             TagThreadMessage::TryAdd(path) =>
