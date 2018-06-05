@@ -1,6 +1,6 @@
 import React, { Component } from 'react';
 import './ImageEditor.css';
-import Constants from './Config.js';
+import TifariAPI from "./APIComms.js"
 
 class TagRemoveButton extends Component {
     render() {
@@ -11,6 +11,18 @@ class TagRemoveButton extends Component {
 }
 
 class ImageEditor extends Component {
+
+    constructor(props) {
+        super(props);
+
+        this.onTagAddInputChange = this.onTagAddInputChange.bind(this);
+    }
+
+    onTagAddInputChange(ev) {
+        if(ev.key === "Enter") {
+        }
+    }
+
     render() {
 
         const tags = this.props.img.tags.map(t => <TagRemoveButton key={t.id} tag={t}/>);
@@ -19,9 +31,16 @@ class ImageEditor extends Component {
             <div className="ImageEditor_sidebar">
                 <img
                     alt = ""
-                    src = {Constants.ENDPOINT_API_IMAGE + this.props.img.path}
+                    src = {TifariAPI.getImageUrl(this.props.img)}
                 />
+
                 <ul>{tags}</ul>
+
+                <div>
+                    <input type="text" 
+                        onChange={this.onTagAddInputChange}
+                    />
+                </div>
             </div>
         );
     }

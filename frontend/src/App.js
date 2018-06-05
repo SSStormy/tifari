@@ -3,8 +3,8 @@ import './App.css';
 
 import SearchField from './SearchField.js';
 import ImageSlot from './ImageSlot.js';
-import Constants from './Config.js'
 import ImageEditor from './ImageEditor.js'
+import TifariAPI from "./APIComms.js"
 
 class App extends Component {
 
@@ -20,7 +20,8 @@ class App extends Component {
         this.requeryImages = this.requeryImages.bind(this);
         this.onSelectImage= this.onSelectImage.bind(this);
         this.hideEditorSidebar= this.hideEditorSidebar.bind(this);
-        this.escKeyListener= this.escKeyListener.bind(this);
+        this.escKeyListener = this.escKeyListener.bind(this);
+        this.viewToBeTaggedList = this.viewToBeTaggedList.bind(this);
     }
 
     hideEditorSidebar() {
@@ -30,7 +31,7 @@ class App extends Component {
     }
 
     escKeyListener(ev) {
-        if(ev.keyCode === 27) {
+        if(ev.key === "Escape") {
             this.hideEditorSidebar();
         }
     }
@@ -50,30 +51,23 @@ class App extends Component {
     }
 
     requeryImages(tagsArray) {
-        try {
-            fetch(Constants.ENDPOINT_API_SEARCH, {
-                method: "POST",
-
-                body: JSON.stringify({
-                    tags: tagsArray,
-                    offset: 0,
-                    max: 20
-                })
-            })
-            .then(results => results.json())
+        TifariAPI.search(tagsArray)
             .then(data => {
                 let mappedImages = data.results.map(img => 
                     <ImageSlot img={img} key={img.id} onClick={() => this.onSelectImage(img)}/>);
                 this.setState({queriedImages: mappedImages});
             });
-        } catch(err) {
-            console.error(err);
-        }
     }
 
     onSearch(query) {
         let tags = query.split(" ");
         this.requeryImages(tags);
+    }
+
+    viewToBeTaggedList() {
+        this.setState({
+            queriedImages: TifariAPI.getToBeTaggedList()
+        });
     }
 
     render() {
@@ -84,6 +78,7 @@ class App extends Component {
                 }
 
                 <header>
+                    <button onClick={this.viewToBeTaggedList}>View To-Tag List</button>
                     <SearchField onChange = {this.onSearch} />
                 </header>
 

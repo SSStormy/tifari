@@ -1,5 +1,5 @@
 import React, { Component } from 'react';
-import Constants from './Config.js'
+import TifariAPI from "./APIComms.js"
 
 class ImageField extends Component {
     render() {
@@ -9,7 +9,7 @@ class ImageField extends Component {
                 onClick={this.props.onClick}>
                 <img 
                     alt=""
-                    src={Constants.ENDPOINT_API_IMAGE + this.props.img.path}
+                    src={TifariAPI.getImageUrl(this.props.img)}
                     style={{maxWidth: "512px"}}
                 />
             </span>
