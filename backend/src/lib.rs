@@ -4,6 +4,10 @@ extern crate notify;
 extern crate walkdir;
 extern crate chrono;
 extern crate models;
+extern crate serde;
+
+#[macro_use]
+extern crate serde_derive;
 
 mod error;
 
@@ -11,19 +15,31 @@ pub use self::error::*;
 
 use std::collections::HashSet;
 
-#[derive(Clone)]
+#[derive(Clone, Deserialize, Serialize)]
 pub enum DbOpenType
 {
     FromPath(String),
     InMemory
 }
 
-#[derive(Clone)]
+#[derive(Clone, Deserialize, Serialize)]
 pub struct TifariConfig 
 {
     db_type: DbOpenType,
     image_root: String,
 }
+
+impl TifariConfig 
+{
+    pub fn new(db_type: DbOpenType, image_root: String) -> TifariConfig
+    {
+        TifariConfig { db_type, image_root }
+    }
+
+    pub fn get_root(&self) -> &String { &self.image_root }
+    pub fn get_db_type(&self) -> &DbOpenType { &self.db_type }
+}
+
 
 pub struct TifariBackend 
 {
@@ -54,16 +70,6 @@ enum TagThreadMessage
     TryAdd(String),
     TryRemove(String),
     Quit,
-}
-
-impl TifariConfig 
-{
-    pub fn new(db_type: DbOpenType, image_root: String) -> TifariConfig
-    {
-        TifariConfig { db_type, image_root }
-    }
-
-    pub fn get_root(&self) -> &String { &self.image_root }
 }
 
 impl TifariDb 

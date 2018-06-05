@@ -119,41 +119,16 @@ impl Service for Search {
     }
 }
 
-fn get_cfg() -> backend::TifariConfig{
-    backend::TifariConfig::new(
-        backend::DbOpenType::FromPath("db.sqlite".to_string()),
-        "images".to_string())
-}
-
-fn setup_test_db() {
-    let mut db = backend::TifariDb::new_from_cfg(get_cfg()).unwrap();
-    let boat1 = "boat1.jpg".to_string();
-    let boat2 = "boat2.jpg".to_string();
-    let boat3 = "boat3.jpg".to_string();
-    let boat4 = "boat4.jpg".to_string();
-
-    let boat_tag = "boat".to_string();
-    let spec_tag = "special".to_string();
-
-    db.try_insert_image(&boat1).unwrap();
-    db.try_insert_image(&boat2).unwrap();
-    db.try_insert_image(&boat3).unwrap();
-    db.try_insert_image(&boat4).unwrap();
-
-    db.give_tag(&boat1, &boat_tag).unwrap();
-    db.give_tag(&boat2, &boat_tag).unwrap();
-    db.give_tag(&boat3, &boat_tag).unwrap();
-    db.give_tag(&boat4, &boat_tag).unwrap();
-
-    db.give_tag(&boat1, &spec_tag).unwrap();
-    db.give_tag(&boat2, &spec_tag).unwrap();
+// TODO : proper config loading etc etc
+fn get_cfg() -> backend::TifariConfig {
+    let cfg = std::fs::read_to_string("config.json").unwrap();
+    serde_json::from_str(&cfg).unwrap()
 }
 
 fn main() {
-    //setup_test_db();
     let addr = "127.0.0.1:8001".parse().unwrap();
+
     let server = Http::new().bind(&addr, || { 
-        // TODO : this gets called on every fucking request
         let cfg = get_cfg();
         let staticfile = hyper_staticfile::Static::new(std::path::Path::new(cfg.get_root()));
 

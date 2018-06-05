@@ -3,3 +3,5 @@ images/
 *.sqlite
 target/
 node_modules/
+config.json
+*.db
