@@ -489,6 +489,16 @@ impl TifariDb
         Ok(results)
     }
 
+    pub fn get_num_elements_in_tag_queue(&self) -> Result<i64> {
+
+        let retval = self.connection.query_row(
+            "SELECT count(*) FROM tag_queue", 
+            &[],
+            |row| row.get(0))?;
+
+        Ok(retval)
+    }
+
     pub fn get_all_tags(&self) -> Result<Vec<models::TagWithUsage>> {
         let mut statement = self.connection.prepare("SELECT id, name FROM tags")?;
         let mut retvals = vec![];
@@ -699,6 +709,42 @@ mod tests {
         assert!(db.give_tag(img_id, &tag1).is_err());
         assert!(db.give_tag(img_id, &tag1).is_err());
         assert!(db.give_tag(img_id, &tag1).is_err());
+    }
+
+    #[test]
+    fn db_tag_queue_element_counter() {
+        let mut db = TifariDb::new_in_memory().unwrap();
+
+        let img1 = "test/img1.png".to_string();
+        let img2 = "test/img2.png".to_string();
+
+        let tag1 = "tag_1".to_string();
+
+        assert_eq!(db.get_num_elements_in_tag_queue().unwrap(), 0);
+
+        db.try_insert_image(&img1).unwrap();
+        assert_eq!(db.get_num_elements_in_tag_queue().unwrap(), 1);
+
+        let img2_id = db.try_insert_image(&img2).unwrap();
+        assert_eq!(db.get_num_elements_in_tag_queue().unwrap(), 2);
+
+        db.erase_image(&img1).unwrap();
+        assert_eq!(db.get_num_elements_in_tag_queue().unwrap(), 1);
+
+        let tag1_id = db.give_tag(img2_id, &tag1).unwrap();
+        assert_eq!(db.get_num_elements_in_tag_queue().unwrap(), 0);
+
+        let img1_id = db.try_insert_image(&img1).unwrap();
+        assert_eq!(db.get_num_elements_in_tag_queue().unwrap(), 1);
+
+        db.remove_tag(img2_id, tag1_id).unwrap();
+        assert_eq!(db.get_num_elements_in_tag_queue().unwrap(), 2);
+
+        db.give_tag(img1_id, &tag1).unwrap();
+        assert_eq!(db.get_num_elements_in_tag_queue().unwrap(), 1);
+
+        db.erase_image(&img2).unwrap();
+        assert_eq!(db.get_num_elements_in_tag_queue().unwrap(), 0);
     }
 
     #[test]
