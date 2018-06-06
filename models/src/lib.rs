@@ -115,6 +115,17 @@ impl RemoveTagsRequest {
 }
 
 #[derive(Serialize)]
+pub struct TagQueueSizeResponse {
+    tag_queue_size: i64,
+}
+
+impl TagQueueSizeResponse {
+    pub fn new(tag_queue_size: i64) -> Self {
+        TagQueueSizeResponse { tag_queue_size }
+    }
+}
+
+#[derive(Serialize)]
 pub struct AddTagsResponse {
     tags: Vec<Tag>
 }
