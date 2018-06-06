@@ -34,13 +34,11 @@ class SearchField extends Component {
 
     render() {
         return (
-            <div>
             <input 
                 ref={(obj) => this.searchBar = obj}
                 type="text"
                 onChange={this.onInputChange}
             />
-            </div>
         );
     }
 }

@@ -13,7 +13,7 @@ class App extends Component {
 
         this.state = {
             queriedImages: [],
-            selectedImage: null,
+            selectedImages: []
         };
 
         this.onSearch = this.onSearch.bind(this);
@@ -27,7 +27,7 @@ class App extends Component {
 
     hideEditorSidebar() {
         this.setState({
-            selectedImage: null
+            selectedImages: []
         });
     }
 
@@ -41,19 +41,33 @@ class App extends Component {
         document.addEventListener("keypress", this.escKeyListener, false);
     }
 
-    componentWillUnMount() {
+    componentWillUnmount() {
         document.removeEventListener("keypress", this.escKeyListener, false);
     }
 
     onSelectImage(img) {
-        this.setState({
-            selectedImage: img
-        });
+        // avoid duplicate images
+        for(var i = 0; i < this.state.selectedImages.length; i++) {
+            if(img.id === this.state.selectedImages[i].id) {
+                return;
+            }
+        }
+
+        // append im to selectedImages
+        this.setState(prevState => ({
+          selectedImages: [...prevState.selectedImages, img]
+        }));
     }
 
     mapSelectedImages(images) {
         let mappedImages = images.results.map(img => 
-            <ImageSlot img={img} key={img.id} onClick={() => this.onSelectImage(img)}/>);
+            <ImageSlot 
+                img={img} 
+                key={img.id} 
+                onClick={() => this.onSelectImage(img)}
+            />
+        );
+
         this.setState({queriedImages: mappedImages});
     }
 
@@ -73,12 +87,13 @@ class App extends Component {
     render() {
         return (
             <div className="App">
-                {this.state.selectedImage !== null &&
-                    <ImageEditor img={this.state.selectedImage}/>
+                {this.state.selectedImages.length > 0 &&
+                    <ImageEditor images={this.state.selectedImages}/>
                 }
 
                 <header>
                     <button onClick={this.viewToBeTaggedList}>View To-Tag List</button>
+                    <button onClick={() => TifariAPI.reloadRoot()}>Reload images</button>
                     <SearchField onChange = {this.onSearch} />
                 </header>
 

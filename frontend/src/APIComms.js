@@ -1,8 +1,18 @@
 const ENDPOINT_API_SEARCH = "http://localhost:8001/api/search";
 const ENDPOINT_API_TAG_QUEUE = "http://localhost:8001/api/tag_queue";
+const ENDPOINT_API_RELOAD_ROOT = "http://localhost:8001/api/reload";
 const ENDPOINT_API_IMAGE  = "http://localhost:8001/";
 
 class TifariAPI {
+    static reloadRoot() {
+        try {
+            return fetch(ENDPOINT_API_RELOAD_ROOT, { method: "GET" });
+        }
+        catch(err) {
+            console.error(err);
+        }
+    }
+
     static getToBeTaggedList() {
         try {
             return fetch(ENDPOINT_API_TAG_QUEUE, { method: "GET" })
