@@ -16,17 +16,19 @@ class App extends Component {
             queriedImages: [],
             selectedImages: [],
             displayTagList: false,
+            tagQueueSize: 0,
         };
 
-        this.onSearch = this.onSearch.bind(this);
-        this.requeryImages = this.requeryImages.bind(this);
-        this.onSelectImage= this.onSelectImage.bind(this);
-        this.hideEditorSidebar= this.hideEditorSidebar.bind(this);
-        this.escKeyListener = this.escKeyListener.bind(this);
+        this.onSearch           = this.onSearch.bind(this);
+        this.requeryImages      = this.requeryImages.bind(this);
+        this.onSelectImage      = this.onSelectImage.bind(this);
+        this.hideEditorSidebar  = this.hideEditorSidebar.bind(this);
+        this.escKeyListener     = this.escKeyListener.bind(this);
         this.viewToBeTaggedList = this.viewToBeTaggedList.bind(this);
-        this.mapSelectedImages = this.mapSelectedImages.bind(this);
-        this.onEditorAddTag= this.onEditorAddTag.bind(this);
-        this.onEditorRemoveTag = this.onEditorRemoveTag.bind(this);
+        this.mapSelectedImages  = this.mapSelectedImages.bind(this);
+        this.onEditorAddTag     = this.onEditorAddTag.bind(this);
+        this.onEditorRemoveTag  = this.onEditorRemoveTag.bind(this);
+        this.queryTagListSize   = this.queryTagListSize.bind(this);
     }
 
     hideEditorSidebar() {
@@ -41,6 +43,10 @@ class App extends Component {
         }
     }
 
+    componentWillMount() {
+        this.queryTagListSize()
+    }
+
     componentDidMount() {
         document.addEventListener("keypress", this.escKeyListener, false);
     }
@@ -49,6 +55,7 @@ class App extends Component {
         document.removeEventListener("keypress", this.escKeyListener, false);
     }
 
+    // callback that's called when we want to select an image
     onSelectImage(img) {
         // avoid duplicate images
         for(var i = 0; i < this.state.selectedImages.length; i++) {
@@ -63,6 +70,7 @@ class App extends Component {
         }));
     }
 
+    // maps a given image array to image slots for display in tghe main page
     mapSelectedImages(images) {
         let mappedImages = images.results.map(img => 
             <ImageSlot 
@@ -75,19 +83,23 @@ class App extends Component {
         this.setState({queriedImages: mappedImages});
     }
 
+    // will display search results in the main page
     requeryImages(tagsArray) {
         TifariAPI.search(tagsArray).then(this.mapSelectedImages);
     }
 
+    // will display the to be tagged list in the main page
     viewToBeTaggedList() {
         TifariAPI.getToBeTaggedList().then(this.mapSelectedImages);
     }
 
+    // callback that's called when we want to search the backend for tags
     onSearch(query) {
         let tags = query.split(" ");
         this.requeryImages(tags);
     }
 
+    // callback that's called whenever we add a tag to an image
     onEditorAddTag(index, tags) {
         this.setState(oldState => {
             let newArray = oldState.selectedImages[index].tags.concat(tags);
@@ -95,8 +107,21 @@ class App extends Component {
             oldState.selectedImages[index].tags = newArray;
             return {selectedImages: oldState.selectedImages}
         });
+        
+        this.queryTagListSize();
     }
 
+    // updates the tagQueueSize state from the backend
+    queryTagListSize() {
+        TifariAPI.getTagQueueSize()
+            .then(size => {
+                this.setState({
+                    tagQueueSize: size
+                });
+            });
+    }
+
+    // callback that's called when we remove a tag from an image
     onEditorRemoveTag(image, tag) {
         TifariAPI.removeTags([tag.id], [image.id]);
         
@@ -112,7 +137,9 @@ class App extends Component {
             oldState.selectedImages[imgIndex].tags.splice(tagIndex, 1);
 
             return {selectedImages: oldState.selectedImages}
-        })
+        });
+
+        this.queryTagListSize();
     }
 
     render() {
@@ -132,7 +159,7 @@ class App extends Component {
                 }
 
                 <header>
-                    <button onClick={this.viewToBeTaggedList}>View To-Tag List</button>
+                    <button onClick={this.viewToBeTaggedList}>View To-Tag List({this.state.tagQueueSize})</button>
                     <button onClick={() => TifariAPI.reloadRoot()}>Reload images</button>
             
                     <button 

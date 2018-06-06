@@ -1,16 +1,30 @@
-const ENDPOINT_API_SEARCH       = "http://localhost:8001/api/search";
-const ENDPOINT_API_TAG_QUEUE    = "http://localhost:8001/api/tag_queue";
-const ENDPOINT_API_ADD_TAGS     = "http://localhost:8001/api/add_tags";
-const ENDPOINT_API_REMOVE_TAGS  = "http://localhost:8001/api/remove_tags";
-const ENDPOINT_API_GET_ALL_TAGS = "http://localhost:8001/api/get_all_tags";
-const ENDPOINT_API_RELOAD_ROOT  = "http://localhost:8001/api/reload";
-const ENDPOINT_API_IMAGE        = "http://localhost:8001/";
+const ENDPOINT_API_SEARCH               = "http://localhost:8001/api/search";
+const ENDPOINT_API_TAG_QUEUE            = "http://localhost:8001/api/tag_queue";
+const ENDPOINT_API_ADD_TAGS             = "http://localhost:8001/api/add_tags";
+const ENDPOINT_API_REMOVE_TAGS          = "http://localhost:8001/api/remove_tags";
+const ENDPOINT_API_GET_ALL_TAGS         = "http://localhost:8001/api/get_all_tags";
+const ENDPOINT_API_GET_TAG_QUEUE_SIZE   = "http://localhost:8001/api/tag_queue_size";
+const ENDPOINT_API_RELOAD_ROOT          = "http://localhost:8001/api/reload";
+const ENDPOINT_API_IMAGE                = "http://localhost:8001/";
 
 class TifariAPI {
+
+    static getTagQueueSize() {
+        try {
+            return fetch(ENDPOINT_API_GET_TAG_QUEUE_SIZE, { method: "GET" })
+                    .then(results => results.json())
+                    .then(payload => payload.tag_queue_size);
+        }
+        catch(err) {
+            console.error(err);
+        }
+    }
+
+
     static getAllTags() {
         try {
             return fetch(ENDPOINT_API_GET_ALL_TAGS, { method: "GET" })
-                    .then(results => results.json())
+                    .then(results => results.json());
         }
         catch(err) {
             console.error(err);
@@ -29,7 +43,7 @@ class TifariAPI {
     static getToBeTaggedList() {
         try {
             return fetch(ENDPOINT_API_TAG_QUEUE, { method: "GET" })
-                .then(results => results.json())
+                .then(results => results.json());
         }
         catch(err) {
             console.error(err);
@@ -51,7 +65,7 @@ class TifariAPI {
                     max: 20
                 })
             })
-            .then(results => results.json())
+            .then(results => results.json());
         } catch(err) {
             console.error(err);
         }
@@ -67,7 +81,7 @@ class TifariAPI {
                     image_id: img.id
                 })
             })
-            .then(results => results.json())
+            .then(results => results.json());
         }
         catch(err) {
             console.error(err);
@@ -84,13 +98,11 @@ class TifariAPI {
                     image_ids: imgs,
                 })
             })
-            .then(results => results.json())
-
+            .then(results => results.json());
         }
         catch(err) {
             console.error(err);
         }
-
     }
 }
 
