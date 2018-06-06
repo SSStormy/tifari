@@ -87,6 +87,14 @@ impl TifariDb
         Ok(())
     }
 
+    fn insert_into_tag_queue(tx: &rusqlite::Transaction, image_id: i64) -> Result<()> {
+        tx.execute_named(
+            "INSERT INTO tag_queue (id, image_id) VALUES (null, :image_id)",
+            &[(":image_id", &image_id)])?;
+
+        Ok(())
+    }
+
     pub fn try_insert_image(&mut self, path: &String) -> Result<i64>
     {
         let tx = self.connection.transaction()?;
@@ -112,23 +120,21 @@ impl TifariDb
             VALUES (null, :path, :tags_array_table, :time)",
             &[(":path", path),
               (":tags_array_table", &rusqlite::types::Null),
-              (":time", &chrono::Utc::now().timestamp())]).unwrap();
+              (":time", &chrono::Utc::now().timestamp())])?;
 
         let image_id = tx.last_insert_rowid();
 
         tx.execute(
-            &format!("CREATE TABLE IF NOT EXISTS tags_array_table_{} (tag_id INTEGER NOT NULL, UNIQUE(tag_id))", image_id), &[]).unwrap();
+            &format!("CREATE TABLE IF NOT EXISTS tags_array_table_{} (tag_id INTEGER NOT NULL, UNIQUE(tag_id))", image_id), &[])?;
 
         let tag_table_id = tx.last_insert_rowid();
 
         tx.execute_named(
             "UPDATE images SET tags_array_table=:tags_array_table WHERE id=:id",
             &[(":tags_array_table", &tag_table_id),
-              (":id", &image_id)]).unwrap();
+              (":id", &image_id)])?;
 
-        tx.execute_named(
-            "INSERT INTO tag_queue (id, image_id) VALUES (null, :image_id)",
-            &[(":image_id", &image_id)]).unwrap();
+        TifariDb::insert_into_tag_queue(&tx, image_id)?;
 
         tx.commit()?;
         Ok(image_id)
@@ -362,6 +368,16 @@ impl TifariDb
 
         TifariDb::erase_tag_if_not_used(&tx, tag_id, image_ids_array_id)?;
 
+        // get the number of tags this image has
+        let tag_count: i64 = tx.query_row(
+            &format!("SELECT count(*) FROM tags_array_table_{}", tags_array_table_id),
+            &[],
+            |row| row.get(0))?;
+
+        if 0 >= tag_count {
+            TifariDb::insert_into_tag_queue(&tx, image_id)?;
+        }
+
         tx.commit()?;
         Ok(())
     }
@@ -481,12 +497,12 @@ impl TifariDb
             let result = result?;
             let (id, name) = (result.0, result.1);
 
-            let numTimesUsed = self.connection.query_row(
+            let num_times_used = self.connection.query_row(
                 &format!("SELECT count(*) FROM image_ids_array_table_{}", id), 
                 &[],
                 |row| row.get(0))?;
 
-            retvals.push(models::TagWithUsage::new(id, name, numTimesUsed));
+            retvals.push(models::TagWithUsage::new(id, name, num_times_used));
         }
 
         Ok(retvals)
@@ -686,6 +702,78 @@ mod tests {
     }
 
     #[test]
+    fn db_tag_queue_gets_filled_when_tags_are_removed_from_images() {
+        let mut db = TifariDb::new_in_memory().unwrap();
+
+        let img1 = "test/img1.png".to_string();
+        let img2 = "test/img2.png".to_string();
+
+        let tag1 = "tag_1".to_string();
+
+        let img1_id = db.try_insert_image(&img1).unwrap();
+        let img2_id = db.try_insert_image(&img2).unwrap();
+
+        {
+            let queue = db.get_tag_queue().unwrap();
+
+            assert_eq!(queue.len(), 2);
+
+            assert_eq!(queue[0].get_path(), &img2);
+            assert_eq!(queue[0].get_id(), img2_id);
+
+            assert_eq!(queue[1].get_path(), &img1);
+            assert_eq!(queue[1].get_id(), img1_id);
+        }
+
+        let tag1_id = db.give_tag(img2_id, &tag1).unwrap();
+
+        {
+            let queue = db.get_tag_queue().unwrap();
+
+            assert_eq!(queue.len(), 1);
+
+            assert_eq!(queue[0].get_path(), &img1);
+            assert_eq!(queue[0].get_id(), img1_id);
+        }
+
+
+        assert_eq!(db.give_tag(img1_id, &tag1).unwrap(), tag1_id);
+        let queue = db.get_tag_queue().unwrap();
+        assert_eq!(queue.len(), 0);
+
+        db.remove_tag(img1_id, tag1_id).unwrap();
+
+        {
+            let queue = db.get_tag_queue().unwrap();
+
+            assert_eq!(queue.len(), 1);
+
+            assert_eq!(queue[0].get_path(), &img1);
+            assert_eq!(queue[0].get_id(), img1_id);
+        }
+
+
+        assert_eq!(db.give_tag(img1_id, &tag1).unwrap(), tag1_id);
+        let queue = db.get_tag_queue().unwrap();
+        assert_eq!(queue.len(), 0);
+
+        db.remove_tag(img1_id, tag1_id).unwrap();
+        db.remove_tag(img2_id, tag1_id).unwrap();
+
+        {
+            let queue = db.get_tag_queue().unwrap();
+
+            assert_eq!(queue.len(), 2);
+
+            assert_eq!(queue[0].get_path(), &img2);
+            assert_eq!(queue[0].get_id(), img2_id);
+
+            assert_eq!(queue[1].get_path(), &img1);
+            assert_eq!(queue[1].get_id(), img1_id);
+        }
+    }
+
+    #[test]
     fn db_tag_queue() 
     {
         let mut db = TifariDb::new_in_memory().unwrap();
@@ -700,22 +788,30 @@ mod tests {
         {
             let queue = db.get_tag_queue().unwrap();
             assert_eq!(queue.len(), 1);
+
             assert_eq!(queue[0].get_path(), &img1);
+            assert_eq!(queue[0].get_id(), img1_id);
         }
 
         let img2_id = db.try_insert_image(&img2).unwrap();
         {
             let queue = db.get_tag_queue().unwrap();
             assert_eq!(queue.len(), 2);
+
             assert_eq!(queue[0].get_path(), &img2);
+            assert_eq!(queue[0].get_id(), img2_id);
+
             assert_eq!(queue[1].get_path(), &img1);
+            assert_eq!(queue[1].get_id(), img1_id);
         }
 
         db.give_tag(img1_id, &tag1).unwrap();
         {
             let queue = db.get_tag_queue().unwrap();
             assert_eq!(queue.len(), 1);
+
             assert_eq!(queue[0].get_path(), &img2);
+            assert_eq!(queue[0].get_id(), img2_id);
         }
 
         db.give_tag(img2_id, &tag1).unwrap();
