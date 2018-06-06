@@ -1,16 +1,18 @@
 .ImageEditor_sidebar {
-    height: 100%; /* Full-height: remove this if you want "auto" height */
-    width: 30%; /* Set the width of the sidebar */
+    height: 100%; 
+    width: 33%;
 
-    position: fixed; /* Fixed Sidebar (stay in place on scroll) */
-    z-index: 1; /* Stay on top */
-    top: 0; /* Stay at the top */
+    position: fixed; 
+    z-index: 1; 
+    top: 0;
 
     background-color: #1a1a1a; 
     color: #fdfdfd;
-    overflow-x: hidden; /* Disable horizontal scroll */
+    overflow-x: hidden; 
+    overflow-y: scroll; 
 
-    padding: 1%;
+    padding-left: 1%;
+    padding-right: 1%;
 }
 
 .ImageEditor_sidebar ul {

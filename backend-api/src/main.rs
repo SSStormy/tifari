@@ -60,6 +60,38 @@ impl Service for Search {
 
         // TODO : @HACK, we shouldn't have to box task1
         let task1: Box<Future<Item=Self::Response, Error=APIError>> = match (req.method(), req.path()) {
+            (Method::Post, "/api/add_tags") => {
+                Box::new(req_to_json::<models::AddTagsRequest>(req)
+                    .and_then(move |query| {
+                        match backend::TifariDb::new(cfg) {
+                            Ok(db) => Ok((query, db)),
+                            Err(e) => Err(APIError::from(e)),
+                       }
+                    })
+                    .and_then(|(query, mut db)| {
+                        let mut tags = vec![];
+
+                        for tag in query.get_tags() {
+                            match db.give_tag(query.get_image_id(), &tag) {
+                                Ok(id) => tags.push(models::Tag::new(id, tag.clone())),
+                                Err(e) => println!("add_tags req failed for tag {}. {:?}", tag,  e),
+                            };
+                        }
+
+                        ok(tags)
+                    })
+                    .and_then(|tags| {
+                        conv_result(serde_json::to_string(&models::AddTagsResponse::new(tags)))
+                    })
+                    .and_then(|payload| {
+                        let response = Self::Response::new() 
+                            .with_status(StatusCode::Ok)
+                            .with_header(ContentLength(payload.len() as u64))
+                            .with_body(payload);
+
+                        ok(response)
+                }))
+            }
             
             (Method::Get, "/api/reload") => {
 

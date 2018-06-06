@@ -87,7 +87,7 @@ impl TifariDb
         Ok(())
     }
 
-    pub fn try_insert_image(&mut self, path: &String) -> Result<()>
+    pub fn try_insert_image(&mut self, path: &String) -> Result<i64>
     {
         let tx = self.connection.transaction()?;
 
@@ -131,7 +131,7 @@ impl TifariDb
             &[(":image_id", &image_id)]).unwrap();
 
         tx.commit()?;
-        Ok(())
+        Ok(image_id)
     }
 
     fn erase_tag_if_not_used(
@@ -270,14 +270,14 @@ impl TifariDb
         Ok(db)
     }
 
-    pub fn give_tag(&mut self, image_path: &String, tag: &String) -> Result<()>
+    pub fn give_tag(&mut self, image_id: i64, tag: &String) -> Result<i64>
     {
         let tx = self.connection.transaction()?;
 
-        let (image_id, tags_array_table_id): (i64, i64) = tx.query_row(
-            "SELECT id, tags_array_table FROM images WHERE path=? LIMIT 1",
-            &[image_path],
-            |row| (row.get(0), row.get(1)))?;
+        let tags_array_table_id: i64 = tx.query_row(
+            "SELECT tags_array_table FROM images WHERE id=? LIMIT 1",
+            &[&image_id],
+            |row| (row.get(0)))?;
 
         let (tag_id, image_ids_array_id): (i64, i64) = match tx.query_row(
                             "SELECT id, image_ids_array_table 
@@ -331,24 +331,24 @@ impl TifariDb
             &[&tag_id])?;
 
         tx.commit()?;
-        Ok(())
+        Ok(tag_id)
     }
 
-    pub fn remove_tag(&mut self, image_path: &String, tag: &String) -> Result<()>
+    pub fn remove_tag(&mut self, image_id: i64, tag_id: i64) -> Result<()>
     {
         let tx = self.connection.transaction()?;
 
         // get tag id and image id array from db
-        let (tag_id, image_ids_array_id): (i64, i64)  = tx.query_row(
-            "SELECT id, image_ids_array_table FROM tags WHERE name=? LIMIT 1", 
-            &[tag],
-            |row| (row.get(0), row.get(1)))?;
+        let image_ids_array_id: i64  = tx.query_row(
+            "SELECT image_ids_array_table FROM tags WHERE id=? LIMIT 1", 
+            &[&tag_id],
+            |row| (row.get(0)))?;
 
         // get image id and tag id array fcrom db
-        let (image_id, tags_array_table_id): (i64, i64) = tx.query_row(
-            "SELECT id, tags_array_table FROM images WHERE path=? LIMIT 1",
-            &[image_path],
-            |row| (row.get(0), row.get(1)))?;
+        let tags_array_table_id: i64 = tx.query_row(
+            "SELECT tags_array_table FROM images WHERE id=? LIMIT 1",
+            &[&image_id],
+            |row| (row.get(0)))?;
         
         // remove tag id from image tag array
         tx.execute(
@@ -533,7 +533,7 @@ impl TifariDb
 
         for path_to_add in root_imgs.difference(&db_imgs) {
             match self.try_insert_image(&path_to_add) {
-                Ok(()) => println!("Adding new image: {}", path_to_add),
+                Ok(id) => println!("Adding new image: {} {}", path_to_add, id),
                 Err(e) => println!("Failed to insert new image {} to image db. Error: {:?}", path_to_add, e),
             };
         }
@@ -592,24 +592,62 @@ mod tests {
         let tag1 = "tag_1".to_string();
         let tag2 = "tag_2".to_string();
 
-        assert!(db.give_tag(&img, &tag1).is_err());
-        assert!(db.remove_tag(&img, &tag1).is_err());
-        assert!(db.give_tag(&img, &tag2).is_err());
-        assert!(db.remove_tag(&img, &tag2).is_err());
+        assert!(db.give_tag(1, &tag1).is_err());
+        assert!(db.remove_tag(1, 1).is_err());
+        assert!(db.give_tag(1, &tag2).is_err());
+        assert!(db.remove_tag(1, 2).is_err());
 
-        db.try_insert_image(&img).unwrap();
-        db.give_tag(&img, &tag1).unwrap();
+        let img_id = db.try_insert_image(&img).unwrap();
+        let tag1_id = db.give_tag(img_id, &tag1).unwrap();
 
-        assert!(db.give_tag(&img, &tag1).is_err());
-        assert!(db.remove_tag(&img, &tag2).is_err());
+        assert!(db.give_tag(img_id, &tag1).is_err());
+        assert!(db.remove_tag(img_id, 2).is_err());
 
-        db.remove_tag(&img, &tag1).unwrap();
+        db.remove_tag(img_id, tag1_id).unwrap();
 
-        assert!(db.remove_tag(&img, &tag1).is_err());
+        assert!(db.remove_tag(img_id, tag1_id).is_err());
 
-        db.give_tag(&img, &tag2).unwrap();
-        assert!(db.remove_tag(&img, &tag1).is_err());
-        db.remove_tag(&img, &tag2).unwrap()
+        let tag2_id = db.give_tag(img_id, &tag2).unwrap();
+        assert!(db.remove_tag(img_id, tag1_id).is_err());
+        db.remove_tag(img_id, tag2_id).unwrap()
+    }
+
+    #[test]
+    fn db_consistent_tag_ids() {
+        let mut db = TifariDb::new_in_memory().unwrap();
+
+        let img1 = String::from("img1");
+        let img2 = String::from("img2");
+        let img3 = String::from("img3");
+        let img4 = String::from("img4");
+
+        let tag1 = String::from("tag1");
+        let tag2 = String::from("tag2");
+
+        let img1_id = db.try_insert_image(&img1).unwrap();
+        let img2_id = db.try_insert_image(&img2).unwrap();
+
+        let tag1_id = db.give_tag(img1_id, &tag1).unwrap();
+        assert_eq!(db.give_tag(img2_id, &tag1).unwrap(), tag1_id);
+
+        let tag2_id = db.give_tag(img1_id, &tag2).unwrap();
+        assert_eq!(db.give_tag(img2_id, &tag2).unwrap(), tag2_id);
+
+        assert_ne!(tag1_id, tag2_id);
+
+        let img3_id = db.try_insert_image(&img3).unwrap();
+        let img4_id = db.try_insert_image(&img4).unwrap();
+
+        let tag1_id2 = db.give_tag(img3_id, &tag1).unwrap();
+        assert_eq!(db.give_tag(img4_id, &tag1).unwrap(), tag1_id2);
+
+        let tag2_id2 = db.give_tag(img3_id, &tag2).unwrap();
+        assert_eq!(db.give_tag(img4_id, &tag2).unwrap(), tag2_id2);
+
+        assert_ne!(tag1_id2, tag2_id2);
+
+        assert_eq!(tag1_id, tag1_id2);
+        assert_eq!(tag2_id, tag2_id2);
     }
 
     #[test]
@@ -620,12 +658,12 @@ mod tests {
 
         let tag1 = "tag_1".to_string();
 
-        db.try_insert_image(&img).unwrap();
-        db.give_tag(&img, &tag1).unwrap();
+        let img_id = db.try_insert_image(&img).unwrap();
+        db.give_tag(img_id, &tag1).unwrap();
 
-        assert!(db.give_tag(&img, &tag1).is_err());
-        assert!(db.give_tag(&img, &tag1).is_err());
-        assert!(db.give_tag(&img, &tag1).is_err());
+        assert!(db.give_tag(img_id, &tag1).is_err());
+        assert!(db.give_tag(img_id, &tag1).is_err());
+        assert!(db.give_tag(img_id, &tag1).is_err());
     }
 
     #[test]
@@ -639,14 +677,14 @@ mod tests {
 
         assert_eq!(db.get_tag_queue().unwrap().len(), 0);
 
-        db.try_insert_image(&img1).unwrap();
+        let img1_id = db.try_insert_image(&img1).unwrap();
         {
             let queue = db.get_tag_queue().unwrap();
             assert_eq!(queue.len(), 1);
             assert_eq!(queue[0].get_path(), &img1);
         }
 
-        db.try_insert_image(&img2).unwrap();
+        let img2_id = db.try_insert_image(&img2).unwrap();
         {
             let queue = db.get_tag_queue().unwrap();
             assert_eq!(queue.len(), 2);
@@ -654,14 +692,14 @@ mod tests {
             assert_eq!(queue[1].get_path(), &img1);
         }
 
-        db.give_tag(&img1, &tag1).unwrap();
+        db.give_tag(img1_id, &tag1).unwrap();
         {
             let queue = db.get_tag_queue().unwrap();
             assert_eq!(queue.len(), 1);
             assert_eq!(queue[0].get_path(), &img2);
         }
 
-        db.give_tag(&img2, &tag1).unwrap();
+        db.give_tag(img2_id, &tag1).unwrap();
         assert_eq!(db.get_tag_queue().unwrap().len(), 0);
     }
 
@@ -677,44 +715,52 @@ mod tests {
         let tag2 = "tag2".to_string();
         let tag3 = "tag3".to_string();
 
-        db.try_insert_image(&img1).unwrap();
-        db.give_tag(&img1, &tag1).unwrap();
+        let img1_id = db.try_insert_image(&img1).unwrap();
+        let tag1_id = db.give_tag(img1_id, &tag1).unwrap();
 
-        db.try_insert_image(&img2).unwrap();
-        db.give_tag(&img2, &tag2).unwrap();
+        let img2_id = db.try_insert_image(&img2).unwrap();
+        let tag2_id = db.give_tag(img2_id, &tag2).unwrap();
 
         {
             let results = db.search(&vec![tag1.clone()], 0, 50).unwrap();
             assert_eq!(results.len(), 1);
             assert_eq!(results[0].get_path(), &img1);
+            assert_eq!(results[0].get_id(), img1_id);
         }
 
         {
             let results = db.search(&vec![tag2.clone()], 0, 50).unwrap();
             assert_eq!(results.len(), 1);
             assert_eq!(results[0].get_path(), &img2);
+            assert_eq!(results[0].get_id(), img2_id);
         }
 
-        db.try_insert_image(&img3).unwrap();
-        db.give_tag(&img1, &tag2).unwrap();
-        db.give_tag(&img3, &tag3).unwrap();
+        let img3_id = db.try_insert_image(&img3).unwrap();
+        assert_eq!(db.give_tag(img1_id, &tag2).unwrap(), tag2_id);
+        db.give_tag(img3_id, &tag3).unwrap();
 
         {
             let results = db.search(&vec![tag2.clone()], 0, 50).unwrap();
             assert_eq!(results.len(), 2);
 
             assert_eq!(results[0].get_path(), &img2);
+            assert_eq!(results[0].get_id(), img2_id);
+
             assert_eq!(results[1].get_path(), &img1);
+            assert_eq!(results[1].get_id(), img1_id);
         }
 
-        db.give_tag(&img3, &tag1).unwrap();
+        assert_eq!(db.give_tag(img3_id, &tag1).unwrap(), tag1_id);
 
         {
             let results = db.search(&vec![tag1.clone()], 0, 50).unwrap();
             assert_eq!(results.len(), 2);
 
             assert_eq!(results[0].get_path(), &img3);
+            assert_eq!(results[0].get_id(), img3_id);
+
             assert_eq!(results[1].get_path(), &img1);
+            assert_eq!(results[1].get_id(), img1_id);
         }
 
         {
@@ -723,30 +769,30 @@ mod tests {
             for i in 0..10
             {
                 let img = format!("test/img_iter{}.png", i);
-                db.try_insert_image(&img).unwrap();
-                db.give_tag(&img, &tag4).unwrap();
+                let img_id = db.try_insert_image(&img).unwrap();
+                db.give_tag(img_id, &tag4).unwrap();
             }
 
             let after_10 = "special_img10".to_string();
-            db.try_insert_image(&after_10).unwrap();
-            db.give_tag(&after_10, &tag4).unwrap();
+            let after_10_id = db.try_insert_image(&after_10).unwrap();
+            db.give_tag(after_10_id, &tag4).unwrap();
 
             for i in 10..15
             {
                 let img = format!("test/img_iter{}.png", i);
-                db.try_insert_image(&img).unwrap();
-                db.give_tag(&img, &tag4).unwrap();
+                let img_id = db.try_insert_image(&img).unwrap();
+                db.give_tag(img_id, &tag4).unwrap();
             }
 
             let after_15 = "special_img15".to_string();
-            db.try_insert_image(&after_15).unwrap();
-            db.give_tag(&after_15, &tag4).unwrap();
+            let after_15_id = db.try_insert_image(&after_15).unwrap();
+            db.give_tag(after_15_id, &tag4).unwrap();
 
             for i in 15..20
             {
                 let img = format!("test/img_iter{}.png", i);
-                db.try_insert_image(&img).unwrap();
-                db.give_tag(&img, &tag4).unwrap();
+                let img_id = db.try_insert_image(&img).unwrap();
+                db.give_tag(img_id, &tag4).unwrap();
             }
 
             {
@@ -754,10 +800,20 @@ mod tests {
                 assert_eq!(results.len(), 10);
 
                 assert_ne!(results[0].get_path(), &after_15); // 18
+                assert_ne!(results[0].get_id(), after_15_id); // 18
+
                 assert_ne!(results[1].get_path(), &after_15); // 17
+                assert_ne!(results[1].get_id(), after_15_id); // 17
+
                 assert_ne!(results[2].get_path(), &after_15); // 16
+                assert_ne!(results[2].get_id(), after_15_id); // 16
+
                 assert_eq!(results[3].get_path(), &after_15); // our guy
+                assert_eq!(results[3].get_id(), after_15_id); // our guy
+
                 assert_ne!(results[4].get_path(), &after_15); // 15
+                assert_ne!(results[4].get_id(), after_15_id); // 15
+
             }
 
             {
@@ -765,12 +821,24 @@ mod tests {
                 assert_eq!(results.len(), 10);
 
                 assert_ne!(results[0].get_path(), &after_15); // 16
+                assert_ne!(results[0].get_id(), after_15_id); // 16
+
                 assert_eq!(results[1].get_path(), &after_15); // our guy
+                assert_eq!(results[1].get_id(), after_15_id); // our guy
+
                 assert_ne!(results[2].get_path(), &after_15); // 15
+                assert_ne!(results[2].get_id(), after_15_id); // 15
+
 
                 assert_ne!(results[6].get_path(), &after_10); // 11
+                assert_ne!(results[6].get_id(), after_10_id); // 11
+
                 assert_eq!(results[7].get_path(), &after_10); 
+                assert_eq!(results[7].get_id(), after_10_id); 
+
                 assert_ne!(results[8].get_path(), &after_10); // 10
+                assert_ne!(results[8].get_id(), after_10_id); // 10
+
             }
         }
     }

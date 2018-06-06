@@ -76,6 +76,28 @@ impl SearchQuery {
     pub fn get_max(&self) -> usize { self.max }
 }
 
+#[derive(Deserialize)]
+pub struct AddTagsRequest {
+    tags: Vec<String>,
+    image_id: i64
+}
+
+impl AddTagsRequest {
+    pub fn get_tags(&self) -> &Vec<String> { &self.tags }
+    pub fn get_image_id(&self) -> i64 { self.image_id }
+}
+
+
+#[derive(Serialize)]
+pub struct AddTagsResponse {
+    tags: Vec<Tag>
+}
+
+impl AddTagsResponse {
+    pub fn new(tags: Vec<Tag>) -> Self {
+        AddTagsResponse { tags }
+    }
+}
 
 #[derive(Serialize, Deserialize)]
 pub struct SearchResult {
