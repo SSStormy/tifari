@@ -103,6 +103,16 @@ impl AddTagsRequest {
     pub fn get_image_id(&self) -> i64 { self.image_id }
 }
 
+#[derive(Deserialize)] 
+pub struct RemoveTagsRequest {
+    tag_ids: Vec<i64>,
+    image_ids: Vec<i64>,
+}
+
+impl RemoveTagsRequest {
+    pub fn get_tag_ids(&self) -> &Vec<i64> { &self.tag_ids } 
+    pub fn get_image_ids(&self) -> &Vec<i64> { &self.image_ids } 
+}
 
 #[derive(Serialize)]
 pub struct AddTagsResponse {

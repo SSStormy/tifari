@@ -25,7 +25,8 @@ class App extends Component {
         this.escKeyListener = this.escKeyListener.bind(this);
         this.viewToBeTaggedList = this.viewToBeTaggedList.bind(this);
         this.mapSelectedImages = this.mapSelectedImages.bind(this);
-        this.addTagsToImage = this.addTagsToImage.bind(this);
+        this.onEditorAddTag= this.onEditorAddTag.bind(this);
+        this.onEditorRemoveTag = this.onEditorRemoveTag.bind(this);
     }
 
     hideEditorSidebar() {
@@ -87,7 +88,7 @@ class App extends Component {
         this.requeryImages(tags);
     }
 
-    addTagsToImage(index, tags) {
+    onEditorAddTag(index, tags) {
         this.setState(oldState => {
             let newArray = oldState.selectedImages[index].tags.concat(tags);
 
@@ -96,17 +97,38 @@ class App extends Component {
         });
     }
 
+    onEditorRemoveTag(image, tag) {
+        TifariAPI.removeTags([tag.id], [image.id]);
+        
+        this.setState(oldState => {
+
+            let imgIndex = oldState.selectedImages.findIndex(i => i.id === image.id);
+            if(imgIndex === -1) return oldState;
+            
+            let tagIndex = oldState.selectedImages[imgIndex].tags.findIndex(t => t.id === tag.id);
+            if(tagIndex === -1) return oldState;
+
+            // remove 
+            oldState.selectedImages[imgIndex].tags.splice(tagIndex, 1);
+
+            return {selectedImages: oldState.selectedImages}
+        })
+    }
+
     render() {
         return (
             <div className="App">
                 {this.state.selectedImages.length > 0 &&
                     <ImageEditor 
                         images={this.state.selectedImages}
-                        addTagsToImage={this.addTagsToImage}/>
+                        addTagsToImage={this.onEditorAddTag}
+                        onRemoveTag={this.onEditorRemoveTag}
+                    />
                 }
 
                 {this.state.displayTagList &&
-                    <TagList/>
+                    <TagList
+                    />
                 }
 
                 <header>

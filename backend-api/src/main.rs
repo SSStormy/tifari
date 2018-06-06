@@ -43,6 +43,16 @@ fn req_to_json<'a, T>(req: hyper::Request) -> impl Future<Item=T, Error=APIError
         })
 }
 
+fn get_default_success_response() -> hyper::Response {
+    let payload = "{\"status\": 200}";
+    let response = hyper::Response::new() 
+        .with_status(StatusCode::Ok)
+        .with_header(ContentLength(payload.len() as u64))
+        .with_body(payload);
+
+    response
+}
+
 impl Service for Search {
     type Request = Request;
     type Response = Response;
@@ -60,6 +70,28 @@ impl Service for Search {
 
         // TODO : @HACK, we shouldn't have to box task1
         let task1: Box<Future<Item=Self::Response, Error=APIError>> = match (req.method(), req.path()) {
+            (Method::Post, "/api/remove_tags") => {
+               Box::new(req_to_json::<models::RemoveTagsRequest>(req)
+                    .and_then(move |query| {
+                        match backend::TifariDb::new(cfg) {
+                            Ok(db) => Ok((query, db)),
+                            Err(e) => Err(APIError::from(e)),
+                       }
+                    })
+                    .and_then(|(query, mut db)| {
+
+                        for tag in query.get_tag_ids() {
+                            for img in query.get_image_ids() {
+                                match db.remove_tag(*img, *tag) {
+                                    Ok(()) => (),
+                                    Err(e) => println!("remove tags failed: {:?}", e),
+                                };
+                            }
+                        }
+                        ok(get_default_success_response())
+                    })
+                )
+            },
             (Method::Get, "/api/get_all_tags") => {
                 let get_response = || {
                     let db = backend::TifariDb::new(cfg.clone())?;
@@ -114,15 +146,8 @@ impl Service for Search {
                 let get_response = || {
                     let mut db = backend::TifariDb::new(cfg.clone())?;
                     db.reload_root();
-
-                    let payload = "{\"status\": 200}";
-                    let response = Self::Response::new() 
-                        .with_status(StatusCode::Ok)
-                        .with_header(ContentLength(payload.len() as u64))
-                        .with_body(payload);
-
-                    Ok(response)
-                };
+                    Ok(get_default_success_response())
+              };
 
                 Box::new(FutureResult::from(get_response()))
             },

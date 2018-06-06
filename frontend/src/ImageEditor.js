@@ -2,29 +2,6 @@ import React, { Component } from 'react';
 import './ImageEditor.css';
 import TifariAPI from "./APIComms.js"
 
-class TagRemoveButton extends Component {
-
-    constructor(props) {
-        super(props);
-
-        this.onClicked = this.onClicked.bind(this);
-    }
-
-    onClicked() {
-        // TODO : this should fire a callback in the parent to notify of removal.
-        alert(this.props.tag.id);
-    }
-
-    render() {
-        return (
-            <button
-                onClick={this.onClicked}>
-                {this.props.tag.name}
-            </button>
-        );
-    }
-}
-
 class ImageEditor extends Component {
 
     constructor(props) {
@@ -69,7 +46,11 @@ class ImageEditor extends Component {
                 if(existingTags.has(tag.id)) return;
 
                 existingTags.add(tag.id);
-                tags.push(<TagRemoveButton key={tag.id} tag={tag}/>);
+                tags.push(
+                    <button onClick={() => this.props.onRemoveTag(img, tag)}>
+                        {tag.name}
+                    </button>
+                );
             })
         })
 
