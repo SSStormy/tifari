@@ -473,6 +473,25 @@ impl TifariDb
         Ok(results)
     }
 
+    pub fn get_all_tags(&self) -> Result<Vec<models::TagWithUsage>> {
+        let mut statement = self.connection.prepare("SELECT id, name FROM tags")?;
+        let mut retvals = vec![];
+
+        for result in statement.query_map(&[], |row| (row.get(0), row.get(1)))? {
+            let result = result?;
+            let (id, name) = (result.0, result.1);
+
+            let numTimesUsed = self.connection.query_row(
+                &format!("SELECT count(*) FROM tags_array_table_{}", id), 
+                &[],
+                |row| row.get(0))?;
+
+            retvals.push(models::TagWithUsage::new(id, name, numTimesUsed));
+        }
+
+        Ok(retvals)
+    }
+
     fn get_all_image_paths(&self) -> Result<HashSet<String>> {
         let mut db_imgs = HashSet::new();
         let mut statement = self.connection.prepare("SELECT path FROM images")?;

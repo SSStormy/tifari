@@ -8,6 +8,7 @@ Backend:
       Compare on disk files with in database files, remove the paths that only exist in the db from the db.
       Do this on start.
 
+    ☐ Get rid of image_id_table* and tag_id_table* since we can just use the tag and image ids for those.
 Frontend:
     Image editor
         ☐ Close button

@@ -20,6 +20,22 @@ impl Tag {
     pub fn get_name(&self) -> &String { &self.name }
 }
 
+#[derive(Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
+pub struct TagWithUsage {
+    id: i64,
+    name: String,
+    times_used: i64,
+}
+
+impl TagWithUsage {
+    pub fn new(id: i64, name: String, times_used: i64) -> Self {
+        TagWithUsage { id, name, times_used }
+    }
+
+    pub fn get_id(&self) -> i64 { self.id }
+    pub fn get_name(&self) -> &String { &self.name }
+    pub fn get_times_used(&self) -> i64 { self.times_used }
+}
 
 #[derive(Serialize, Deserialize)]
 pub struct Image

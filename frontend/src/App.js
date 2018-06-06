@@ -4,6 +4,7 @@ import './App.css';
 import SearchField from './SearchField.js';
 import ImageSlot from './ImageSlot.js';
 import ImageEditor from './ImageEditor.js'
+import TagList from './TagList.js'
 import TifariAPI from "./APIComms.js"
 
 class App extends Component {
@@ -13,7 +14,8 @@ class App extends Component {
 
         this.state = {
             queriedImages: [],
-            selectedImages: []
+            selectedImages: [],
+            displayTagList: false,
         };
 
         this.onSearch = this.onSearch.bind(this);
@@ -103,9 +105,20 @@ class App extends Component {
                         addTagsToImage={this.addTagsToImage}/>
                 }
 
+                {this.state.displayTagList &&
+                    <TagList/>
+                }
+
                 <header>
                     <button onClick={this.viewToBeTaggedList}>View To-Tag List</button>
                     <button onClick={() => TifariAPI.reloadRoot()}>Reload images</button>
+            
+                    <button 
+                        onClick={() => this.setState({displayTagList: !this.state.displayTagList})}
+                        >
+                        {this.state.displayTagList ? "Hide" : "Show"} tag list
+                    </button>
+
                     <SearchField onChange = {this.onSearch} />
                 </header>
 

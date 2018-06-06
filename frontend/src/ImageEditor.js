@@ -11,7 +11,6 @@ class TagRemoveButton extends Component {
     }
 
     onClicked() {
-
         // TODO : this should fire a callback in the parent to notify of removal.
         alert(this.props.tag.id);
     }

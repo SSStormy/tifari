@@ -60,6 +60,22 @@ impl Service for Search {
 
         // TODO : @HACK, we shouldn't have to box task1
         let task1: Box<Future<Item=Self::Response, Error=APIError>> = match (req.method(), req.path()) {
+            (Method::Get, "/api/get_all_tags") => {
+                let get_response = || {
+                    let db = backend::TifariDb::new(cfg.clone())?;
+                    let tags = db.get_all_tags()?;
+                    let payload = serde_json::to_string(&tags)?;
+
+                    let response = Self::Response::new() 
+                        .with_status(StatusCode::Ok)
+                        .with_header(ContentLength(payload.len() as u64))
+                        .with_body(payload);
+
+                    Ok(response)
+                };
+
+                Box::new(FutureResult::from(get_response()))
+            },
             (Method::Post, "/api/add_tags") => {
                 Box::new(req_to_json::<models::AddTagsRequest>(req)
                     .and_then(move |query| {
