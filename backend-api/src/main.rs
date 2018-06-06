@@ -141,7 +141,7 @@ impl Service for Search {
                         ok(tags)
                     })
                     .and_then(|tags| {
-                        conv_result(serde_json::to_string(&models::AddTagsResponse::new(tags)))
+                        conv_result(serde_json::to_string(&tags))
                     })
                     .and_then(|payload| {
                         ok(get_resp_with_payload(payload))
@@ -164,7 +164,7 @@ impl Service for Search {
                 let get_response = || {
                     let db = backend::TifariDb::new(cfg.clone())?;
                     let queue = db.get_tag_queue()?;
-                    let payload = serde_json::to_string(&models::SearchResult::new(queue))?;
+                    let payload = serde_json::to_string(&queue)?;
                     Ok(get_resp_with_payload(payload))
                 };
 
@@ -182,7 +182,7 @@ impl Service for Search {
                          conv_result(db.search(&query.get_tags(), query.get_offset(), query.get_max()))
                     })
                     .and_then(|images| {
-                        conv_result(serde_json::to_string(&models::SearchResult::new(images)))
+                        conv_result(serde_json::to_string(&images))
                     })
                     .and_then(|payload| {
                         ok(get_resp_with_payload(payload))

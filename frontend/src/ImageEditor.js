@@ -47,7 +47,10 @@ class ImageEditor extends Component {
 
                 existingTags.add(tag.id);
                 tags.push(
-                    <button onClick={() => this.props.onRemoveTag(img, tag)}>
+                    <button 
+                        key={tag.id}
+                        onClick={() => this.props.onRemoveTag(img, tag)}
+                        >
                         {tag.name}
                     </button>
                 );

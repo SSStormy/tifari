@@ -124,27 +124,3 @@ impl TagQueueSizeResponse {
         TagQueueSizeResponse { tag_queue_size }
     }
 }
-
-#[derive(Serialize)]
-pub struct AddTagsResponse {
-    tags: Vec<Tag>
-}
-
-impl AddTagsResponse {
-    pub fn new(tags: Vec<Tag>) -> Self {
-        AddTagsResponse { tags }
-    }
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct SearchResult {
-    results: Vec<Image>
-}
-
-impl SearchResult {
-    pub fn new(results: Vec<Image>) -> Self {
-        SearchResult { results }
-    }
-
-    pub fn get_results(&self) -> &Vec<Image> { &self.results }
-}

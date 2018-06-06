@@ -43,7 +43,7 @@ class TifariAPI {
     static getToBeTaggedList() {
         try {
             return fetch(ENDPOINT_API_TAG_QUEUE, { method: "GET" })
-                .then(results => results.json());
+                .then(results => results.json())
         }
         catch(err) {
             console.error(err);

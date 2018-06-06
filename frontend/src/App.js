@@ -14,9 +14,12 @@ class App extends Component {
 
         this.state = {
             queriedImages: [],
+            queriedImagesAsElements: [],
+            isInToTagList: false,
             selectedImages: [],
             displayTagList: false,
             tagQueueSize: 0,
+            searchTags: [],
         };
 
         this.onSearch           = this.onSearch.bind(this);
@@ -29,6 +32,8 @@ class App extends Component {
         this.onEditorAddTag     = this.onEditorAddTag.bind(this);
         this.onEditorRemoveTag  = this.onEditorRemoveTag.bind(this);
         this.queryTagListSize   = this.queryTagListSize.bind(this);
+        this.inStateMapSelectedImages  = this.inStateMapSelectedImages.bind(this);
+        this.inStateRemoveImageFromQueryIfTagsArentInQuery = this.inStateRemoveImageFromQueryIfTagsArentInQuery.bind(this);
     }
 
     hideEditorSidebar() {
@@ -71,8 +76,8 @@ class App extends Component {
     }
 
     // maps a given image array to image slots for display in tghe main page
-    mapSelectedImages(images) {
-        let mappedImages = images.results.map(img => 
+    inStateMapSelectedImages(images) {
+        let mappedImages = images.map(img => 
             <ImageSlot 
                 img={img} 
                 key={img.id} 
@@ -80,16 +85,37 @@ class App extends Component {
             />
         );
 
-        this.setState({queriedImages: mappedImages});
+        return {
+            queriedImages: images.results,
+            queriedImagesAsElements: mappedImages
+        };
+    }
+
+    mapSelectedImages(images) {
+        let data = this.inStateMapSelectedImages(images);
+        this.setState({
+            queriedImages: data.queriedImages,
+            queriedImagesAsElements: data.queriedImagesAsElements,
+        });
     }
 
     // will display search results in the main page
     requeryImages(tagsArray) {
+        this.setState({
+            searchTags: tagsArray,
+            isInToTagList: false,
+        });
+
         TifariAPI.search(tagsArray).then(this.mapSelectedImages);
     }
 
     // will display the to be tagged list in the main page
     viewToBeTaggedList() {
+        this.setState({
+            searchTags: [],
+            isInToTagList: true,
+        });
+
         TifariAPI.getToBeTaggedList().then(this.mapSelectedImages);
     }
 
@@ -97,18 +123,6 @@ class App extends Component {
     onSearch(query) {
         let tags = query.split(" ");
         this.requeryImages(tags);
-    }
-
-    // callback that's called whenever we add a tag to an image
-    onEditorAddTag(index, tags) {
-        this.setState(oldState => {
-            let newArray = oldState.selectedImages[index].tags.concat(tags);
-
-            oldState.selectedImages[index].tags = newArray;
-            return {selectedImages: oldState.selectedImages}
-        });
-        
-        this.queryTagListSize();
     }
 
     // updates the tagQueueSize state from the backend
@@ -121,25 +135,81 @@ class App extends Component {
             });
     }
 
+    // setState mutation helper method
+    inStateRemoveImageFromQueryIfTagsArentInQuery(state, img, tags) {
+
+        let retval = { 
+            queriedImages: state.queriedImages
+        };
+
+        // remove image from search if the intersection between
+        // image tags and search tags is empty
+        const intersection = state.searchTags.filter(val => -1 !== tags.indexOf(val));
+
+        if(0 >= intersection.length) {
+            console.log("should erase");
+
+            // TODO : errs here
+            let images = state.queriedImages;
+            let imgIndex = images.findIndex(i => i.id === img.id);
+
+            if(imgIndex !== -1) {
+                images.splice(imgIndex, 1);
+                // update listed images and merge with retval.
+                Object.assign(retval, this.inStateMapSelectedImages(state.queriedImages));
+            }
+        }
+
+        return retval;
+    }
+
     // callback that's called when we remove a tag from an image
     onEditorRemoveTag(image, tag) {
         TifariAPI.removeTags([tag.id], [image.id]);
         
         this.setState(oldState => {
+            let images = oldState.selectedImages;
 
-            let imgIndex = oldState.selectedImages.findIndex(i => i.id === image.id);
-            if(imgIndex === -1) return oldState;
+            let imgIndex = images.findIndex(i => i.id === image.id);
+            if(imgIndex === -1) 
+                return {};
             
-            let tagIndex = oldState.selectedImages[imgIndex].tags.findIndex(t => t.id === tag.id);
-            if(tagIndex === -1) return oldState;
+            let tags = oldState.selectedImages[imgIndex].tags;
+            let tagIndex = tags.findIndex(t => t.id === tag.id);
+            if(tagIndex === -1) 
+                return {};
 
-            // remove 
-            oldState.selectedImages[imgIndex].tags.splice(tagIndex, 1);
-
-            return {selectedImages: oldState.selectedImages}
+            // remove tag from img tags array
+            tags.splice(tagIndex, 1);
+            oldState.queriedImages = this.inStateRemoveImageFromQueryIfTagsArentInQuery(oldState, image, tags);
+            return {
+                queriedImages: oldState.queriedImages,
+                selectedImages: oldState.selectedImages,
+            };
         });
 
+
+        // TODO : update tag list
+
         this.queryTagListSize();
+    }
+
+    // callback that's called whenever we add a tag to an image
+    onEditorAddTag(index, tags) {
+        this.setState(oldState => {
+            let image = oldState.selectedImages[index];
+            let newArray = image.tags.concat(tags);
+            image.tags = newArray;
+    
+            if(oldState.isInToTagList)
+                this.inStateRemoveImageFromQueryIfTagsArentInQuery(oldState, image, image.tags);
+
+            return oldState;
+        });
+        
+        this.queryTagListSize();
+
+        // TODO : update tag list
     }
 
     render() {
@@ -171,7 +241,7 @@ class App extends Component {
                     <SearchField onChange = {this.onSearch} />
                 </header>
 
-                <ul>{this.state.queriedImages}</ul>
+                <ul>{this.state.queriedImagesAsElements}</ul>
             </div>
         );
     }
