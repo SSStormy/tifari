@@ -482,7 +482,7 @@ impl TifariDb
             let (id, name) = (result.0, result.1);
 
             let numTimesUsed = self.connection.query_row(
-                &format!("SELECT count(*) FROM tags_array_table_{}", id), 
+                &format!("SELECT count(*) FROM image_ids_array_table_{}", id), 
                 &[],
                 |row| row.get(0))?;
 
