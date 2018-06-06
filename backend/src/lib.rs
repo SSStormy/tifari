@@ -23,8 +23,11 @@ pub struct TifariConfig
 
 impl TifariConfig 
 {
-    pub fn new(db_root: String, image_root: String) -> TifariConfig
-    {
+    pub fn new_empty() -> Self {
+        TifariConfig::new(String::from(""), String::from(""))
+    }
+
+    pub fn new(db_root: String, image_root: String) -> Self {
         TifariConfig { db_root, image_root }
     }
 
@@ -34,7 +37,7 @@ impl TifariConfig
 
 pub struct TifariDb
 {
-    config: Option<TifariConfig>,
+    config: TifariConfig,
     connection: rusqlite::Connection,
 }
 
@@ -251,10 +254,8 @@ impl TifariDb
 
     pub fn new(cfg: TifariConfig) -> Result<Self> 
     {
-        println!("nah");
-
         let conn = rusqlite::Connection::open(cfg.get_db_root())?;
-        let db = TifariDb { config: Some(cfg), connection: conn }; 
+        let db = TifariDb { config: cfg, connection: conn }; 
 
         db.setup_tables()?;
         Ok(db)
@@ -263,7 +264,7 @@ impl TifariDb
     pub fn new_in_memory() -> Result<Self>
     {
         let conn = rusqlite::Connection::open_in_memory()?;
-        let db = TifariDb { config: None, connection: conn }; 
+        let db = TifariDb { config: TifariConfig::new_empty(), connection: conn }; 
         db.setup_tables()?;
 
         Ok(db)
@@ -472,47 +473,72 @@ impl TifariDb
         Ok(results)
     }
 
-    pub fn reload_root(&self) {
-        match &self.config {
-            Some(cfg) => {
-                let path = cfg.get_root();
+    fn get_all_image_paths(&self) -> Result<HashSet<String>> {
+        let mut db_imgs = HashSet::new();
+        let mut statement = self.connection.prepare("SELECT path FROM images")?;
 
-                use std::io;
-                use std::fs::{self, DirEntry};
-                use std::path::Path;
+        for result in statement.query_map(&[], |row| row.get(0))? {
+            db_imgs.insert(result?);
+        }
 
-                println!("Starting root scan at {}", path);
+        Ok(db_imgs)
+    }
 
-                // TODO : gather list of stuff that is in db and on file, operate on that.
-                // confg.get_root() must be absolute
-                for entry in fs::read_dir(path).unwrap()
-                {
-                    let entry = match entry {
-                        Ok(e) => e,
-                        Err(e) => { 
-                            println!("Error in initial root scan: {:?}", e);
-                            continue;
-                        }
-                    };
+    pub fn reload_root(&mut self) {
+        use std::fs;
 
-                    let data = match entry.metadata() {
-                        Ok(e) => e,
-                        Err(e) => {
-                            println!("Error in initial root scan: {:?}", e);
-                            continue;
-                        }
-                    };
+        println!("Starting root scan at {}", self.config.get_root());
 
-                    if data.is_file() {
-                        let path = entry.path().file_name().unwrap().to_string_lossy().to_string();
-                        println!("Found initial file: {:?}", path);
-                    }
+        let mut root_imgs = HashSet::new();
+        for entry in fs::read_dir(self.config.get_root()).unwrap()
+        {
+            let entry = match entry {
+                Ok(e) => e,
+                Err(e) => { 
+                    println!("Error in initial root scan: {:?}", e);
+                    continue;
                 }
+            };
 
-                println!("Done.");
+            let data = match entry.metadata() {
+                Ok(e) => e,
+                Err(e) => {
+                    println!("Error in initial root scan: {:?}", e);
+                    continue;
+                }
+            };
+
+            if data.is_file() {
+                let path = entry.path().file_name().unwrap().to_string_lossy().to_string();
+                println!("Found initial file: {:?}", path);
+                root_imgs.insert(path);
             }
-            None => ()
+        }
+
+        let db_imgs = match self.get_all_image_paths() {
+            Ok(imgs) => imgs,
+            Err(e) => {
+                println!("Failed to query paths in image table from database: {:?}", e);
+                return;
+            }
         };
+
+        for path_to_rm in db_imgs.difference(&root_imgs) {
+            
+            match self.erase_image(&path_to_rm) {
+                Ok(()) => println!("Erasing image: {}", path_to_rm),
+                Err(e) => println!("failed to erase image {}. Error: {:?}", path_to_rm, e),
+            } 
+        }
+
+        for path_to_add in root_imgs.difference(&db_imgs) {
+            match self.try_insert_image(&path_to_add) {
+                Ok(()) => println!("Adding new image: {}", path_to_add),
+                Err(e) => println!("Failed to insert new image {} to image db. Error: {:?}", path_to_add, e),
+            };
+        }
+        
+        println!("Done.");
     }
 }
 

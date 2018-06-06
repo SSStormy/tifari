@@ -2,10 +2,7 @@ extern crate backend;
 extern crate hyper;
 extern crate futures;
 
-#[macro_use]
 extern crate serde_json;
-#[macro_use]
-extern crate serde_derive;
 extern crate serde;
 
 extern crate models;
@@ -13,7 +10,7 @@ extern crate models;
 extern crate hyper_staticfile;
 
 use futures::future::{FutureResult, ok, err};
-use futures::{Future, Stream, IntoFuture};
+use futures::{Future, Stream};
 
 use hyper::header::{AccessControlAllowOrigin, AccessControlAllowMethods, ContentLength};
 use hyper::server::{Service, Request, Response, Http};
@@ -67,7 +64,7 @@ impl Service for Search {
             (Method::Get, "/api/reload") => {
 
                 let get_response = || {
-                    let db = backend::TifariDb::new(cfg.clone())?;
+                    let mut db = backend::TifariDb::new(cfg.clone())?;
                     db.reload_root();
 
                     let payload = "{\"status\": 200}";
@@ -164,8 +161,7 @@ fn get_cfg() -> backend::TifariConfig {
 
 fn main() {
     let addr = "127.0.0.1:8001".parse().unwrap();
-    let db = backend::TifariDb::new(get_cfg()).unwrap();
-
+    let mut db = backend::TifariDb::new(get_cfg()).unwrap();
     db.reload_root();
 
     let server = Http::new().bind(&addr, || { 
