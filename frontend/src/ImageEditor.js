@@ -47,19 +47,16 @@ class ImageEditor extends Component {
             return;
         }
 
-        for(var i = 0; i < this.props.images.length; i++) {
-            TifariAPI.addTags(this.props.images[i], tagsArray)
-                .then(tags => {
-                    // TODO : this could mutate the image array. Callback?
-                    this.props.images[i].tags.concat(tags);
-                });
-        }
+        this.props.images.forEach((img, index) => {
+            TifariAPI.addTags(img, tagsArray)
+                .then(payload => { this.props.addTagsToImage(index, payload.tags) });
+        });
     }
 
     onTagAddInputChange(ev) {
         this.setState({tagString: ev.target.value.trim()});
         if(ev.key === "Enter") {
-            this.submitTags();;
+            this.submitTags();
         }
     }
 

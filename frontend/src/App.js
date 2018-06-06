@@ -23,6 +23,7 @@ class App extends Component {
         this.escKeyListener = this.escKeyListener.bind(this);
         this.viewToBeTaggedList = this.viewToBeTaggedList.bind(this);
         this.mapSelectedImages = this.mapSelectedImages.bind(this);
+        this.addTagsToImage = this.addTagsToImage.bind(this);
     }
 
     hideEditorSidebar() {
@@ -84,11 +85,22 @@ class App extends Component {
         this.requeryImages(tags);
     }
 
+    addTagsToImage(index, tags) {
+        this.setState(oldState => {
+            let newArray = oldState.selectedImages[index].tags.concat(tags);
+
+            oldState.selectedImages[index].tags = newArray;
+            return {selectedImages: oldState.selectedImages}
+        });
+    }
+
     render() {
         return (
             <div className="App">
                 {this.state.selectedImages.length > 0 &&
-                    <ImageEditor images={this.state.selectedImages}/>
+                    <ImageEditor 
+                        images={this.state.selectedImages}
+                        addTagsToImage={this.addTagsToImage}/>
                 }
 
                 <header>
