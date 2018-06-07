@@ -14,8 +14,8 @@ Frontend:
         ☐ Close button
         ☐ Copy button
         ☐ Copy&close button
-        ☐ Give multiple tags in one click
-        ☐ Select many images
+        ✔ Give multiple tags in one click @done(2018-06-07 20:33) @project(Frontend)
+        ✔ Select many images @done(2018-06-07 20:33) @project(Frontend)
 
     ✔ Search @done(2018-06-05 21:12) @project(Programming / Taggable imageboard for artist reference images / Backend / Frontend)
-    ☐ Reload files button
+    ✔ Reload files button @done(2018-06-07 20:33) @project(Frontend)

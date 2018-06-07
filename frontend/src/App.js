@@ -1,9 +1,8 @@
 import React, { Component } from 'react';
 import './App.css';
-import SearchField from './SearchField.js';
 import ImageSlot from './ImageSlot.js';
 import ImageEditor from './ImageEditor.js';
-import TagList from './TagList.js';
+import {TagList, defaultTagOrdering} from './TagList.js';
 import TifariAPI from "./APIComms.js";
 import {ldebug, assert} from "./Logging.js";
 
@@ -47,6 +46,24 @@ class StateMutator {
 
         this.newState.tags = tags;
         return this;
+    }
+
+    setTagOrdering(ordering) {
+        this.newState.tagOrdering = ordering;
+        return this;
+    }
+
+    orderTags() {
+        
+        if(!this.newState.hasOwnProperty("tags")) {
+            this.newState.tags = this.oldState.tags;
+        }
+
+        let tagOrdering = this.newState.hasOwnProperty("tagOrdering")
+            ? this.newState.tagOrdering
+            : this.oldState.tagOrdering;
+
+        tagOrdering.order(this.newState.tags);
     }
 
     setImageList(images) {
@@ -202,9 +219,10 @@ class App extends Component {
             tagQueueSize: 0,
             searchTagNames: [],
             tags: [],
+            tagOrdering: defaultTagOrdering,
         };
 
-        this.foreignOnSearch                = this.foreignOnSearch.bind(this);
+        this.foreignSetTagListOrdering      = this.foreignSetTagListOrdering.bind(this);
         this.foreignToggleTagListDisplay    = this.foreignToggleTagListDisplay.bind(this);
         this.foreignEscKeyListener          = this.foreignEscKeyListener.bind(this);
         this.foreignViewToBeTaggedList      = this.foreignViewToBeTaggedList.bind(this);
@@ -252,7 +270,7 @@ class App extends Component {
     }
 
     // callback that's called when we want to search the backend for tags
-    foreignOnSearch(query) {
+    doImageSearch(query) {
         let tags = query.split(" ");
 
         TifariAPI.search(tags)
@@ -269,8 +287,21 @@ class App extends Component {
         TifariAPI.getTagQueueSize().then(size => this.mutateState(mut => mut.setToBeTaggedListSize(size)));
     }
 
+    foreignSetTagListOrdering(ordering) {
+        this.mutateState(mut => 
+            mut.setTagOrdering(ordering)
+               .orderTags()
+        );
+    }
+
     updateTagList() {
-        TifariAPI.getAllTags().then(tags => this.mutateState(mut => mut.setTags(tags)));
+        TifariAPI.getAllTags().then(tags => { 
+            tags.sort((a, b) => a.times_used < b.times_used);
+            this.mutateState(mut => 
+                mut.setTags(tags)
+                   .orderTags()
+            )
+        });
     }
 
     doTagsMatchSearch(tags) {
@@ -387,7 +418,8 @@ class App extends Component {
 
                 {this.state.displayTagList &&
                     <TagList 
-                        tags={this.state.tags}
+                        tags = {this.state.tags}
+                        callbackSetOrdering = {this.foreignSetTagListOrdering}
                     />
                 }
 
@@ -405,7 +437,10 @@ class App extends Component {
                         {this.state.displayTagList ? "Hide" : "Show"} tag list
                     </button>
 
-                    <SearchField onChange = {this.foreignOnSearch} />
+                    <input
+                        type = "text"
+                        onChange = {ev => this.doImageSearch(ev.target.value.trim())}
+                    />
                 </header>
 
                 <ul>{this.state.queriedImagesAsElements}</ul>

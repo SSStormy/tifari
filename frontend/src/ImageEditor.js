@@ -9,7 +9,9 @@ class ImageEditor extends Component {
 
         this.state = {
             tagString: "",
-        }
+        };
+
+        this.tagInputField = React.createRef();
 
         this.foreignOnTagAddInputChange = this.foreignOnTagAddInputChange.bind(this);
     }
@@ -17,7 +19,9 @@ class ImageEditor extends Component {
     submitTags() {
         let tagsArray = this.state.tagString.trim().split(" ");
         this.setState({tagString: ""});
-        // TODO : clear tag input text box
+
+        // clear tag input field
+        this.tagInputField.current.value = "";
 
         if(0 >= tagsArray.length) { 
             return;
@@ -71,6 +75,7 @@ class ImageEditor extends Component {
 
                 <div>
                     <input type="text" 
+                        ref = {this.tagInputField}
                         onChange = {this.foreignOnTagAddInputChange}
                     />
                                     
