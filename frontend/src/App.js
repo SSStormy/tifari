@@ -64,16 +64,6 @@ class StateMutator {
         return this;
     }
 
-    // TODO: this might be a no-op
-    markSelectedImagesAsDirty() {
-        if(!this.newState.hasOwnProperty("selectedImages")) {
-            ldebug("Marked selected images as dirty.");
-            this.newState.selectedImages = this.oldState.selectedImages;
-        }
-
-        return this;
-    }
-
     getQueriedImagesAndMarkMutated() {
         if(!this.newState.hasOwnProperty("queriedImages")) {
             // if we copy this, we're going to have to add a second layer of
@@ -106,39 +96,25 @@ class StateMutator {
         ldebug(image);
         ldebug(tag);
 
-        let images = this.getQueriedImagesAndMarkMutated();
-
-        let imgIndex = images.findIndex(i => i.id === image.id);
-        if(imgIndex === -1) return this;
-
-        let cachedImg = images[imgIndex];
-        assert(cachedImg === image);
-
-        let tagIndex = cachedImg.tags.findIndex(t => t.id === tag.id);
+        let tagIndex = image.tags.findIndex(t => t.id === tag.id);
         if(tagIndex === -1) return this;
 
-        cachedImg.tags.splice(tagIndex, 1);
+        image.tags.splice(tagIndex, 1);
 
         return this;
     }
 
     // doesn't update the image list.
+    // image must be a part of the app state
     addTagToImage(image, tag) {
         ldebug("Adding tag to image");
         ldebug(image);
         ldebug(tag);
 
-        let images = this.getQueriedImagesAndMarkMutated();
-
-        let imgIndex = images.findIndex(i => i.id === image.id);
-        if(imgIndex === -1) return this;
-
-        let cachedImg = images[imgIndex];
-
-        let tagIndex = cachedImg.tags.findIndex(t => t.id === tag.id);
+        let tagIndex = image.tags.findIndex(t => t.id === tag.id);
 
         if(tagIndex === -1) {
-            cachedImg.tags.push(tag);
+            image.tags.push(tag);
         }
 
         return this;
@@ -148,13 +124,19 @@ class StateMutator {
         ldebug("Adding selected image");
         ldebug(image);
 
-        this.markSelectedImagesAsDirty();
+
+        if(!this.newState.hasOwnProperty("selectedImages")) {
+            ldebug("Marked selected images as dirty.");
+            this.newState.selectedImages = this.oldState.selectedImages;
+        }
+
+        let images = this.newState.selectedImages;
 
         // avoid duplicate images
-        if(this.newState.selectedImages.findIndex(i => i.id === image.id) !== -1)
+        if(images.findIndex(i => i.id === image.id) !== -1)
             return;
 
-        this.newState.selectedImages.push(image);
+        images.push(image);
         return this;
     }
 
@@ -279,11 +261,16 @@ class App extends Component {
                 this.mutateState(mut => mut.setToBeTaggedListSize(size)));
     }
 
-    doesSearchContainTags(tags) {
+    doTagsMatchSearch(tags) {
+        // searchTagNames and tags should intersect.
+
         const intersection = this.state.searchTagNames.filter(
             tagName => tags.findIndex(tag => tag.name === tagName) !== -1);
 
-        return 0 >= intersection.length;
+        ldebug("Intersecting tags:");
+        ldebug(tags);
+
+        return intersection.length > 0;
     }
 
     // callback that's called when we remove a tag from an image
@@ -299,17 +286,11 @@ class App extends Component {
             mut.getOldState().selectedImages
                 .forEach(image => {
 
-                    // TODO : @BUG
-                    // Removing a tag doesn't seem to actually be working.
-                    // Repro:
-                    // go to the to-tag list, add a tag to an image, remove that tag.
-                    // the image will not be readded to the list and the tag will still be there.
-                    
                     mut.removeTagFromImage(image, tag);
 
                     if(mut.getOldState().isInToTagList && 0 >= image.tags.length) {
                         mut.addImageToList(image);
-                    } else if(this.doesSearchContainTags(image.tags)) {
+                    } else if(!this.doTagsMatchSearch(image.tags)) {
                         mut.removeImageFromList(image);
                         rerender = true;
                     }
@@ -317,7 +298,6 @@ class App extends Component {
                 });
 
             // TODO : update tag list
-            mut.markSelectedImagesAsDirty();
             if(rerender);
                mut.renderImageList();
         });
@@ -349,14 +329,12 @@ class App extends Component {
                     rerender = true;
                 } else {
                     mut.getOldState().selectedImages.forEach(img =>{
-                        if(this.doesSearchContainTags(img.tags)) {
+                        if(this.doTagsMatchSearch(img.tags)) {
                             mut.addImageToList(img);
                             rerender = true;
                         }
                     });
                 }
-                    
-                mut.markSelectedImagesAsDirty();
 
                 if(rerender)
                     mut.renderImageList();
