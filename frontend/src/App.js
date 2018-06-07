@@ -41,6 +41,14 @@ class StateMutator {
         return this;
     }
 
+    setTags(tags) {
+        ldebug("Setting tags list to");
+        ldebug(tags);
+
+        this.newState.tags = tags;
+        return this;
+    }
+
     setImageList(images) {
         ldebug("Setting image list.");
         ldebug(images);
@@ -193,6 +201,7 @@ class App extends Component {
             displayTagList: false,
             tagQueueSize: 0,
             searchTagNames: [],
+            tags: [],
         };
 
         this.foreignOnSearch                = this.foreignOnSearch.bind(this);
@@ -215,7 +224,8 @@ class App extends Component {
     }
 
     componentWillMount() {
-        this.updateToBeTaggedListSize()
+        this.updateToBeTaggedListSize();
+        this.updateTagList();
     }
 
     componentDidMount() {
@@ -256,9 +266,11 @@ class App extends Component {
     }
 
     updateToBeTaggedListSize() {
-        TifariAPI.getTagQueueSize()
-            .then(size => 
-                this.mutateState(mut => mut.setToBeTaggedListSize(size)));
+        TifariAPI.getTagQueueSize().then(size => this.mutateState(mut => mut.setToBeTaggedListSize(size)));
+    }
+
+    updateTagList() {
+        TifariAPI.getAllTags().then(tags => this.mutateState(mut => mut.setTags(tags)));
     }
 
     doTagsMatchSearch(tags) {
@@ -296,15 +308,15 @@ class App extends Component {
                     }
 
                 });
-
-            // TODO : update tag list
+    
             if(rerender);
                mut.renderImageList();
         });
 
+        this.updateTagList();
         this.updateToBeTaggedListSize();
     }
-
+    
     // callback that's called whenever we add a tag to an image
     foreignOnEditorAddTagToSelected(tagNames) { 
 
@@ -341,7 +353,7 @@ class App extends Component {
             })
         );
 
-        // TODO : update tag list
+        this.updateTagList();
         this.updateToBeTaggedListSize();
     }
 
@@ -360,6 +372,9 @@ class App extends Component {
     }
 
     render() {
+
+        ldebug("Rendering");
+
         return (
             <div className="App">
                 {this.state.selectedImages.length > 0 &&
@@ -371,7 +386,8 @@ class App extends Component {
                 }
 
                 {this.state.displayTagList &&
-                    <TagList
+                    <TagList 
+                        tags={this.state.tags}
                     />
                 }
 
