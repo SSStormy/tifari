@@ -132,10 +132,12 @@ impl Service for Search {
                         let mut tags = vec![];
 
                         for tag in query.get_tags() {
-                            match db.give_tag(query.get_image_id(), &tag) {
-                                Ok(id) => tags.push(models::Tag::new(id, tag.clone())),
-                                Err(e) => println!("add_tags req failed for tag {}. {:?}", tag,  e),
-                            };
+                            for id in query.get_image_ids() {
+                                match db.give_tag(*id, &tag) {
+                                    Ok(id) => tags.push(models::Tag::new(id, tag.clone())),
+                                    Err(e) => println!("add_tags req failed for tag {}. {:?}", tag,  e),
+                                };
+                            }
                         }
 
                         ok(tags)

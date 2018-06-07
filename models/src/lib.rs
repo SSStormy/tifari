@@ -95,12 +95,12 @@ impl SearchQuery {
 #[derive(Deserialize)]
 pub struct AddTagsRequest {
     tags: Vec<String>,
-    image_id: i64
+    image_ids: Vec<i64>
 }
 
 impl AddTagsRequest {
     pub fn get_tags(&self) -> &Vec<String> { &self.tags }
-    pub fn get_image_id(&self) -> i64 { self.image_id }
+    pub fn get_image_ids(&self) -> &Vec<i64> { &self.image_ids }
 }
 
 #[derive(Deserialize)] 

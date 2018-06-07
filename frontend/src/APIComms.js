@@ -71,14 +71,14 @@ class TifariAPI {
         }
     }
 
-    static addTags(img, tags) {
+    static addTags(tags, image_ids) {
         try {
             return fetch(ENDPOINT_API_ADD_TAGS, {
                 method: "POST",
 
                 body: JSON.stringify({
-                    tags: tags,
-                    image_id: img.id
+                    tags,
+                    image_ids,
                 })
             })
             .then(results => results.json());

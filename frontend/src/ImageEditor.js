@@ -11,25 +11,22 @@ class ImageEditor extends Component {
             tagString: "",
         }
 
-        this.onTagAddInputChange = this.onTagAddInputChange.bind(this);
-        this.submitTags = this.submitTags.bind(this);
+        this.foreignOnTagAddInputChange = this.foreignOnTagAddInputChange.bind(this);
     }
 
     submitTags() {
         let tagsArray = this.state.tagString.trim().split(" ");
         this.setState({tagString: ""});
+        // TODO : clear tag input text box
 
         if(0 >= tagsArray.length) { 
             return;
         }
 
-        this.props.images.forEach((img, index) => {
-            TifariAPI.addTags(img, tagsArray)
-                .then(payload => { this.props.addTagsToImage(index, payload.tags) });
-        });
+        this.props.onAddTag(tagsArray);
     }
 
-    onTagAddInputChange(ev) {
+    foreignOnTagAddInputChange(ev) {
         this.setState({tagString: ev.target.value.trim()});
         if(ev.key === "Enter") {
             this.submitTags();
@@ -37,7 +34,6 @@ class ImageEditor extends Component {
     }
 
     render() {
-        
         let tags = [];
         let existingTags = new Set();
         this.props.images.forEach(img => {
@@ -48,14 +44,15 @@ class ImageEditor extends Component {
                 existingTags.add(tag.id);
                 tags.push(
                     <button 
-                        key={tag.id}
-                        onClick={() => this.props.onRemoveTag(img, tag)}
+                        key = {tag.id}
+                        onClick={() => this.props.onRemoveTag(tag)}
                         >
+
                         {tag.name}
                     </button>
                 );
             })
-        })
+        });
 
         const imgs = this.props.images.map(img => 
             <img
@@ -67,17 +64,20 @@ class ImageEditor extends Component {
 
         return (
             <div className="ImageEditor_sidebar">
+
                 <ul>{imgs}</ul>
 
                 <ul>{tags}</ul>
 
                 <div>
                     <input type="text" 
-                        onChange={this.onTagAddInputChange}
+                        onChange = {this.foreignOnTagAddInputChange}
                     />
                                     
                     {this.state.tagString.length > 0 &&
-                        <button onClick={this.submitTags}>Add tags</button>
+                        <button onClick = {() => this.submitTags()}>
+                            Add tags
+                        </button>
                     }
                 </div>
             </div>
