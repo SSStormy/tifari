@@ -407,14 +407,7 @@ class App extends Component {
 
     foreignAddTagToSearch(tag) {
 
-        // avoid dupes
-        // TODO : @BUG
-        // t.name === tag.name (equality between strings)
-        // is broke.
-        // Avoid string comparisons? compare ids instead?
-        // we'd probs have to have the backend return tag objects from a search as well
-        // for that.
-        if(this.state.searchTagNames.findIndex(t => t.name === tag.name) !== -1)
+        if(this.state.searchTagNames.findIndex(t => t === tag.name) !== -1)
             return;
 
         let search = this.refSearchBar.current;
