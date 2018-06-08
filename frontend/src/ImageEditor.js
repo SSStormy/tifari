@@ -59,11 +59,16 @@ class ImageEditor extends Component {
         });
 
         const imgs = this.props.images.map(img => 
-            <img
+            <button 
+                onClick = {() => this.props.callbackRemoveImageFromSelected(img)}
                 key = {img.id}
-                alt = {img.path}
-                src = {TifariAPI.getImageUrl(img)}
-            />
+            >
+                <img
+                    alt = {img.path}
+                    src = {TifariAPI.getImageUrl(img)}
+                />
+                Remove
+            </button>
         );
 
         return (

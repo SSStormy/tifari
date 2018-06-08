@@ -82,7 +82,7 @@ class StateMutator {
 
         // avoid duplicate images
         if(images.findIndex(i => i.id === image.id) !== -1)
-            return;
+            return this;
     
         images.push(image);
 
@@ -145,23 +145,42 @@ class StateMutator {
         return this;
     }
 
-    addSelectedImage(image) {
-        ldebug("Adding selected image");
-        ldebug(image);
-
-
+    getSelectedImages() {
         if(!this.newState.hasOwnProperty("selectedImages")) {
             ldebug("Marked selected images as dirty.");
             this.newState.selectedImages = this.oldState.selectedImages;
         }
 
-        let images = this.newState.selectedImages;
+        return this.newState.selectedImages;
+
+    }
+
+    addSelectedImage(image) {
+        ldebug("Adding selected image");
+        ldebug(image);
+
+        let images = this.getSelectedImages();
 
         // avoid duplicate images
         if(images.findIndex(i => i.id === image.id) !== -1)
-            return;
+            return this;
 
         images.push(image);
+        return this;
+    }
+
+    removeSelectedImage(image) {
+        ldebug("Removing selected image");
+        ldebug(image);
+
+        let images = this.getSelectedImages();
+        let imgIndex = images.findIndex(i => i.id == image.id);
+
+        if(imgIndex === -1) 
+            return this;
+        
+        images.splice(imgIndex, 1);
+
         return this;
     }
 
@@ -224,6 +243,7 @@ class App extends Component {
 
         this.refSearchBar = React.createRef();
 
+        this.foreignRemoveImageFromSelected = this.foreignRemoveImageFromSelected.bind(this);
         this.foreignSetTagListOrdering      = this.foreignSetTagListOrdering.bind(this);
         this.foreignToggleTagListDisplay    = this.foreignToggleTagListDisplay.bind(this);
         this.foreignEscKeyListener          = this.foreignEscKeyListener.bind(this);
@@ -422,6 +442,10 @@ class App extends Component {
         this.doImageSearch(search.value);
     }
 
+    foreignRemoveImageFromSelected(image) {
+        this.mutateState(mut => mut.removeSelectedImage(image));
+    }
+
     render() {
 
         ldebug("Rendering");
@@ -430,9 +454,10 @@ class App extends Component {
             <div className="App">
                 {this.state.selectedImages.length > 0 &&
                     <ImageEditor 
-                        images={this.state.selectedImages}
-                        onAddTag={this.foreignOnEditorAddTagToSelected}
-                        onRemoveTag={this.foreignOnEditorRemoveTagFromSelected}
+                        images = {this.state.selectedImages}
+                        onAddTag = {this.foreignOnEditorAddTagToSelected}
+                        onRemoveTag = {this.foreignOnEditorRemoveTagFromSelected}
+                        callbackRemoveImageFromSelected = {this.foreignRemoveImageFromSelected}
                     />
                 }
 
