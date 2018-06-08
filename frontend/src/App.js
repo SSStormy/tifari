@@ -222,6 +222,8 @@ class App extends Component {
             tagOrdering: defaultTagOrdering,
         };
 
+        this.refSearchBar = React.createRef();
+
         this.foreignSetTagListOrdering      = this.foreignSetTagListOrdering.bind(this);
         this.foreignToggleTagListDisplay    = this.foreignToggleTagListDisplay.bind(this);
         this.foreignEscKeyListener          = this.foreignEscKeyListener.bind(this);
@@ -229,6 +231,7 @@ class App extends Component {
 
         this.foreignOnEditorRemoveTagFromSelected = this.foreignOnEditorRemoveTagFromSelected.bind(this);
         this.foreignOnEditorAddTagToSelected = this.foreignOnEditorAddTagToSelected.bind(this);
+        this.foreignAddTagToSearch = this.foreignAddTagToSearch.bind(this);
     }
 
     hideEditorSidebar() {
@@ -402,6 +405,30 @@ class App extends Component {
             );
     }
 
+    foreignAddTagToSearch(tag) {
+
+        // avoid dupes
+        // TODO : @BUG
+        // t.name === tag.name (equality between strings)
+        // is broke.
+        // Avoid string comparisons? compare ids instead?
+        // we'd probs have to have the backend return tag objects from a search as well
+        // for that.
+        if(this.state.searchTagNames.findIndex(t => t.name === tag.name) !== -1)
+            return;
+
+        let search = this.refSearchBar.current;
+        search.value = search.value.trim();
+
+        if(0 >= search.value.length) {
+            search.value = search.value.concat(tag.name);
+        } else {
+            search.value = search.value.concat(" ", tag.name);
+        }
+
+        this.doImageSearch(search.value);
+    }
+
     render() {
 
         ldebug("Rendering");
@@ -420,6 +447,7 @@ class App extends Component {
                     <TagList 
                         tags = {this.state.tags}
                         callbackSetOrdering = {this.foreignSetTagListOrdering}
+                        callbackAddTag = {this.foreignAddTagToSearch}
                     />
                 }
 
@@ -439,6 +467,7 @@ class App extends Component {
 
                     <input
                         type = "text"
+                        ref = {this.refSearchBar}
                         onChange = {ev => this.doImageSearch(ev.target.value.trim())}
                     />
                 </header>

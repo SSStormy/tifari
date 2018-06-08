@@ -41,7 +41,11 @@ class TagList extends Component {
     render() {
 
         const tagList = this.props.tags.map(tag => 
-            <li key={tag.id}>{tag.name}({tag.times_used})</li>
+            <div key = {tag.id}>
+            <button onClick = {() => this.props.callbackAddTag(tag)}>
+                {tag.name}({tag.times_used})
+            </button>
+            </div>
         );
 
         const orderingButtons = allOrderings.map(ord =>
@@ -53,11 +57,16 @@ class TagList extends Component {
         );
 
         return (
-            <div className="TagList_sidebar">
+            <div id="sidebar" className="TagList_sidebar">
                 <h1>Tag List</h1>
+
+                <div>
                 <ul>{orderingButtons}</ul>
+                </div>
                 
+                <div>
                 <ul>{tagList}</ul>
+                </div>
             </div>
         );
     }

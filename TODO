@@ -9,7 +9,10 @@ Backend:
       Do this on start.
 
     ☐ Get rid of image_id_table* and tag_id_table* since we can just use the tag and image ids for those.
+    ☐ (orderby:random etc)
+
 Frontend:
+    ☐ Tabs
     Image editor
         ☐ Close button
         ☐ Copy button
@@ -19,3 +22,7 @@ Frontend:
 
     ✔ Search @done(2018-06-05 21:12) @project(Programming / Taggable imageboard for artist reference images / Backend / Frontend)
     ✔ Reload files button @done(2018-06-07 20:33) @project(Frontend)
+
+
+Post-release:
+    ☐ PR awesome-selfhosted
