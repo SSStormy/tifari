@@ -443,7 +443,7 @@ impl TifariDb
             num_tags_in_query += 1;
         }
 
-        if num_tags_in_query == 0
+        if num_tags_in_query == 0 || num_tags_in_query != tags.len()
         {
             return Ok(vec![]);
         }
@@ -468,6 +468,8 @@ impl TifariDb
                          tag_array_id, tag_ids_query),
                          &[],
                          |row| row.get(0))?;
+
+            let count = count as usize;
 
             if count == num_tags_in_query
             {
@@ -867,7 +869,6 @@ mod tests {
     #[test]
     fn db_search()
     {
-        let mut db = TifariDb::new_in_memory().unwrap();
         let img1 = "test/img.png".to_string();
         let img2 = "test/img2.png".to_string();
         let img3 = "test/img3.png".to_string();
@@ -875,6 +876,37 @@ mod tests {
         let tag1 = "tag1".to_string();
         let tag2 = "tag2".to_string();
         let tag3 = "tag3".to_string();
+
+        let mut db = TifariDb::new_in_memory().unwrap();
+
+        let img1_id = db.try_insert_image(&img1).unwrap();
+        let tag1_id = db.give_tag(img1_id, &tag1).unwrap();
+        let tag2_id = db.give_tag(img1_id, &tag2).unwrap();
+        assert_ne!(tag1_id, tag2_id);
+
+        {
+            let results = db.search(&vec![tag3.clone(), tag2.clone()],0,50).unwrap();
+            assert_eq!(results.len(), 0);
+        }
+
+        {
+            let results = db.search(&vec![tag1.clone(), tag2.clone()],0,50).unwrap();
+            assert_eq!(results.len(), 1);
+
+            assert_eq!(results[0].get_path(), &img1);
+            assert_eq!(results[0].get_id(), img1_id);
+
+        }
+
+        {
+            let results = db.search(&vec![tag2.clone(), tag1.clone()],0,50).unwrap();
+            assert_eq!(results.len(), 1);
+
+            assert_eq!(results[0].get_path(), &img1);
+            assert_eq!(results[0].get_id(), img1_id);
+        }
+
+        let mut db = TifariDb::new_in_memory().unwrap();
 
         let img1_id = db.try_insert_image(&img1).unwrap();
         let tag1_id = db.give_tag(img1_id, &tag1).unwrap();
