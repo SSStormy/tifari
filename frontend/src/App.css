@@ -16,13 +16,30 @@
 
 .imageField {
     height: 100%;
+    position: relative;
 
     /* Center contents */
     display: flex;
     justify-content: center;
 }
 
+.imageField .buttonField {
+    position: absolute;
+    bottom: 0;
+    top: 0;
+    right: 0;
+}
+
 .imageField img {
     height: 100%;
+}
+
+.showWhenHovering .showWhenHovering--on,
+.showWhenHovering:hover .showWhenHovering--off {
+  display: none;
+}
+
+.showWhenHovering:hover .showWhenHovering--on {
+  display: inline;
 }
 

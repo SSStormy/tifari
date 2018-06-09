@@ -21,6 +21,7 @@ import Typography from '@material-ui/core/Typography';
 import Paper from '@material-ui/core/Paper';
 import GridListTile from '@material-ui/core/GridListTile';
 import GridList from '@material-ui/core/GridList';
+import ButtonBase from '@material-ui/core/ButtonBase';
 
 class StateMutator {
     constructor(app, oldState) {
@@ -449,11 +450,18 @@ class App extends Component {
         const imageList = this.state.queriedImages.map(img => 
             <Grid item xs={6}>
             <Card square={true} elevation={5} className="imageField">
-
                 <img
                     src={TifariAPI.getImageUrl(img)}
                     title={img.path}
                 />
+
+                <div className="showWhenHovering">
+                    <Button className="buttonField" onClick={() => this.onSelectImage(img)}>
+                        <span className="showWhenHovering--on">
+                            Edit
+                        </span>
+                    </Button>
+                </div>
 
             </Card>
             </Grid>
