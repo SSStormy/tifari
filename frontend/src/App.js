@@ -83,19 +83,48 @@ class StateMutator {
         tagOrdering.order(this.newState.tags);
     }
 
-    setImageList(images) {
-        ldebug("Setting image list.");
-        ldebug(images);
+    getProp(name) {
+        return this.newState.hasOwnProperty(name)
+                ? this.newState[name]
+                : this.oldState[name];
+    }
 
-        this.newState.queriedImages = images;
+    getPropMarkDirty(name) {
+        if(!this.newState.hasOwnProperty(name))
+            this.newState[name] = this.oldState[name];
+
+        return this.newState[name];
+    }
+
+    setActiveImageList(imgsEnum) {
+        ldebug("Setting active image list to");
+        ldebug(imgsEnum);
+        this.newState.activeImageListEnum = imgsEnum;
         return this;
     }
 
-    addImageToList(image) {
-        ldebug("Adding image to list");
-        ldebug(image);
+    setSelectedImages(images) {
+        this.newState.selectedImages = images;
+        return this;
+    }
 
-        let images = this.getQueriedImagesAndMarkMutated();
+    setSearchImages(images) {
+        this.newState.searchImages= images;
+        return this;
+    }
+
+    setToBeTaggedImages(images) {
+        this.newState.toBeTaggedImages = images;
+        return this;
+    }
+
+    clearImgList(imgEnum) {
+        this.newState[imgEnum.prop] = [];
+        return this;
+    }
+
+    addImageToList(imgsEnum, image) {
+        let images = this.getPropMarkDirty(imgsEnum.prop);
 
         // avoid duplicate images
         if(images.findIndex(i => i.id === image.id) !== -1)
@@ -106,23 +135,9 @@ class StateMutator {
         return this;
     }
 
-    getQueriedImagesAndMarkMutated() {
-        if(!this.newState.hasOwnProperty("queriedImages")) {
-            // if we copy this, we're going to have to add a second layer of
-            // indirection by making this queriedImage array store
-            // references to cached values within a cachce area somewhere
-            this.newState.queriedImages = this.oldState.queriedImages;
-        }
-
-        return this.newState.queriedImages;
-    }
-
     // doesn't update the image list.
-    removeImageFromList(image) {
-        ldebug("Removing image from list.");
-        ldebug(image);
-
-        let images = this.getQueriedImagesAndMarkMutated();
+    removeImageFromList(imgsEnum, image) {
+        let images = this.getPropMarkDirty(imgsEnum.prop);
     
         let imgIndex = images.findIndex(i => i.id === image.id);
         if(imgIndex === -1) return this;
@@ -162,71 +177,18 @@ class StateMutator {
         return this;
     }
 
-    getSelectedImages() {
-        if(!this.newState.hasOwnProperty("selectedImages")) {
-            ldebug("Marked selected images as dirty.");
-            this.newState.selectedImages = this.oldState.selectedImages;
-        }
-
-        return this.newState.selectedImages;
-
-    }
-
-    addSelectedImage(image) {
-        ldebug("Adding selected image");
-        ldebug(image);
-
-        let images = this.getSelectedImages();
-
-        // avoid duplicate images
-        if(images.findIndex(i => i.id === image.id) !== -1)
-            return this;
-
-        images.push(image);
-        return this;
-    }
-
-    removeSelectedImage(image) {
-        ldebug("Removing selected image");
-        ldebug(image);
-
-        let images = this.getSelectedImages();
-        let imgIndex = images.findIndex(i => i.id == image.id);
-
-        if(imgIndex === -1) 
-            return this;
-        
-        images.splice(imgIndex, 1);
-
-        return this;
-    }
-
     setTabState(state) {
         this.newState.tabState = state;
 
         return this;
     }
 
-    clearSelectedImages() {
-        ldebug("Clearing selected images");
-
-        this.newState.selectedImages = [];
-        return this;
-    }
-
-    setSearchTags(tagsArray) {
+    setSearchTags(query, tagsArray) {
         ldebug("Setting search tags");
+        ldebug(query);
         ldebug(tagsArray);
-
+        this.newState.searchInput = query;
         this.newState.searchTagNames = tagsArray;
-        return this;
-    }
-
-    setIsInToBeTaggedList(state) {
-        ldebug("Setting is in to be tagged list state to");
-        ldebug(state);
-
-        this.newState.isInToTagList = state;
         return this;
     }
 
@@ -247,33 +209,36 @@ class StateMutator {
     }
 }
 
+const IMGS_SEARCH   = {id: 0, prop: "searchImages" }
+const IMGS_TO_TAG   = {id: 1, prop: "toBeTaggedImages" }
+const IMGS_SELECTED = {id: 2, prop: "selectedImages" }
+
 class App extends Component {
 
     constructor(props) {
         super(props);
 
         this.state = {
-            queriedImages: [],
-            isInToTagList: false,
+            activeImageListEnum: IMGS_SEARCH,
+            searchImages: [],
             selectedImages: [],
+            toBeTaggedImages: [],
+
             displayTagList: false,
             tagQueueSize: 0,
             searchTagNames: [],
+            searchInput: "",
             tags: [],
             tagOrdering: defaultTagOrdering,
             tabState: 0,
         };
 
-        this.refSearchBar = React.createRef();
-
         this.foreignShowSearchTab = this.foreignShowSearchTab.bind(this);
         this.foreignShowToBeTaggedTab = this.foreignShowToBeTaggedTab.bind(this);
         this.foreignShowSelectedTab = this.foreignShowSelectedTab.bind(this);
-        this.removeImageFromSelected        = this.removeImageFromSelected.bind(this);
         this.foreignSetTagListOrdering      = this.foreignSetTagListOrdering.bind(this);
         this.foreignToggleTagListDisplay    = this.foreignToggleTagListDisplay.bind(this);
         this.foreignEscKeyListener          = this.foreignEscKeyListener.bind(this);
-        this.foreignViewToBeTaggedList      = this.foreignViewToBeTaggedList.bind(this);
 
         this.foreignOnEditorRemoveTagFromSelected = this.foreignOnEditorRemoveTagFromSelected.bind(this);
         this.foreignOnEditorAddTagToSelected = this.foreignOnEditorAddTagToSelected.bind(this);
@@ -293,6 +258,14 @@ class App extends Component {
     componentWillMount() {
         this.updateToBeTaggedListSize();
         this.updateTagList();
+        this.updateToBeTaggedList();
+    }
+
+    updateToBeTaggedList() {
+        TifariAPI.getToBeTaggedList()
+            .then(images =>
+                this.mutateState(mut => mut.setToBeTaggedImages(images))
+            );
     }
 
     componentDidMount() {
@@ -314,7 +287,7 @@ class App extends Component {
     // callback that's called when we want to select an image
     onSelectImage(img) {
         this.mutateState(mut => {
-            mut.addSelectedImage(img);
+            mut.addImageToList(IMGS_SELECTED, img);
         })
     }
 
@@ -325,19 +298,21 @@ class App extends Component {
         TifariAPI.search(tags)
             .then(images =>
                 this.mutateState(mut =>
-                    mut.setSearchTags(tags)
-                       .setImageList(images)
-                       .setIsInToBeTaggedList(false))
-                );
+                    mut.setSearchTags(query, tags)
+                       .setSearchImages(images)
+                ));
     }
 
     foreignShowSearchTab() { 
+        this.mutateState(mut => mut.setActiveImageList(IMGS_SEARCH));
     }
 
     foreignShowToBeTaggedTab() { 
+        this.mutateState(mut => mut.setActiveImageList(IMGS_TO_TAG));
     }
 
     foreignShowSelectedTab() { 
+        this.mutateState(mut => mut.setActiveImageList(IMGS_SELECTED));
     }
 
     updateToBeTaggedListSize() {
@@ -437,15 +412,6 @@ class App extends Component {
         this.mutateState(mut => mut.setTagListDisplayState(!mut.getOldState().displayTagList));
     }
 
-    foreignViewToBeTaggedList() {
-        TifariAPI.getToBeTaggedList()
-            .then(images =>
-                this.mutateState(mut => 
-                    mut.setImageList(images)
-                        .setIsInToBeTaggedList(true))
-            );
-    }
-
     foreignAddTagToSearch(tag) {
 
         if(this.state.searchTagNames.findIndex(t => t === tag.name) !== -1)
@@ -464,31 +430,39 @@ class App extends Component {
     }
 
     removeImageFromSelected(image) {
-        this.mutateState(mut => mut.removeSelectedImage(image));
+        this.mutateState(mut => mut.removeImageFromList(IMGS_SELECTED, image));
     }
 
     isImageSelected(image) {
         return -1 !== this.state.selectedImages.findIndex(i => i.id === image.id);
     }
 
+    isViewingSelectedImages() {
+        return this.state.activeImageListEnum.id == IMGS_SELECTED.id;
+    }
+
     render() {
 
         ldebug("Rendering");
 
-        const imageList = this.state.queriedImages.map(img => {
+        const activeImageList = this.state[this.state.activeImageListEnum.prop];
+        const imageList = activeImageList.map(img => {
             
+
             let isSelected = this.isImageSelected(img);
+            let drawSelectedMods = isSelected && !this.isViewingSelectedImages();
+
             return(
-            <Grid item xs={6}>
+            <Grid item xs={6} key={img.id}>
 
             <Card square={true} elevation={5} className="image-field">
                 
-                <img style={{opacity: isSelected ? 0.5 : 1}}
+                <img style={{opacity: drawSelectedMods ? 0.5 : 1}}
                     src={TifariAPI.getImageUrl(img)}
                     title={img.path}
                 />
 
-                { isSelected && 
+                { drawSelectedMods &&
                 <Icon 
                     className="checkmark" 
                     style={{fontSize: 48}}
@@ -525,14 +499,6 @@ class App extends Component {
             <React.Fragment>
             <CssBaseline/>
 
-                {this.state.selectedImages.length > 0 &&
-                    <ImageEditor 
-                        images = {this.state.selectedImages}
-                        onAddTag = {this.foreignOnEditorAddTagToSelected}
-                        onRemoveTag = {this.foreignOnEditorRemoveTagFromSelected}
-                        callbackRemoveImageFromSelected = {this.foreignRemoveImageFromSelected}
-                    />
-                }
 
                 {this.state.displayTagList &&
                     <TagList 
@@ -549,22 +515,32 @@ class App extends Component {
                         onChange={(e, v) => this.mutateState(mut => mut.setTabState(v))}
                         >
 
-                        <Tab label="Search" onClick={this.foreignShowSearchTab}/>
-                        <Tab label={`To-be tagged (${this.state.tagQueueSize})`} onClick={this.foreignShowToBeTaggedTab}/>
-                        <Tab label="Selected" onClick={this.foreignShowSelectedTab}/>
+                        <Tab
+                            label="Search" 
+                            onClick={this.foreignShowSearchTab}
+                        />
+                
+                        <Tab 
+                            label={`To-be tagged (${this.state.tagQueueSize})`} 
+                            onClick={this.foreignShowToBeTaggedTab}
+                        />
+
+                        <Tab 
+                            label={`Selected (${this.state.selectedImages.length})`} 
+                            onClick={this.foreignShowSelectedTab}
+                        />
+
                     </Tabs>
 
                     { this.state.tabState === 0 &&
-                        <div>
                         <TextField 
                             className="center-field"
                             autoFocus = {true}
                             helperText = "Tags"
                             type = "text"
-                            ref = {this.refSearchBar}
+                            value = {this.state.searchInput}
                             onChange = {ev => this.doImageSearch(ev.target.value.trim())}
                         />
-                        </div>
                     }
                 </Paper>
 
@@ -590,6 +566,16 @@ class App extends Component {
 }
 /*
  
+                {this.state.selectedImages.length > 0 &&
+                    <ImageEditor 
+                        images = {this.state.selectedImages}
+                        onAddTag = {this.foreignOnEditorAddTagToSelected}
+                        onRemoveTag = {this.foreignOnEditorRemoveTagFromSelected}
+                        callbackRemoveImageFromSelected = {this.foreignRemoveImageFromSelected}
+                    />
+                }
+
+
 
                     <div className="search-field">
 
