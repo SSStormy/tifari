@@ -9,20 +9,20 @@
 }
 
 .top-bar .search-field .bar-icon {
-    width: 1em;
+    width: 2em;
 }
 
 .top-bar .search-field .search-field {
-    width: calc(100% - 2em);
+    width: calc(100% - 4em);
 }
 
-.imageList {
+.image-list {
     padding-left: 16px;
     padding-right: 16px;
     width: 100%;
 }
 
-.imageField {
+.image-list .image-field {
     height: 100%;
     position: relative;
 
@@ -31,28 +31,28 @@
     justify-content: center;
 }
 
-.imageField .checkmark {
+.image-list .image-field img {
+    height: 100%;
+}
+
+.image-list .image-field .checkmark {
     position: absolute;
     top: 50%;
 }
 
-.imageField .buttonField {
+.image-list .image-field .button-field {
     position: absolute;
     bottom: 0;
     top: 0;
     right: 0;
 }
 
-.imageField img {
-    height: 100%;
-}
-
-.showWhenHovering .showWhenHovering--on,
-.showWhenHovering:hover .showWhenHovering--off {
+.show-when-hovering .show-when-hovering--on,
+.show-when-hovering:hover .show-when-hovering--off {
   display: none;
 }
 
-.showWhenHovering:hover .showWhenHovering--on {
+.show-when-hovering:hover .show-when-hovering--on {
   display: inline;
 }
 

@@ -460,7 +460,7 @@ class App extends Component {
             return(
             <Grid item xs={6}>
 
-            <Card square={true} elevation={5} className="imageField">
+            <Card square={true} elevation={5} className="image-field">
                 
                 <img style={{opacity: isSelected ? 0.5 : 1}}
                     src={TifariAPI.getImageUrl(img)}
@@ -476,19 +476,19 @@ class App extends Component {
                 </Icon>
                 }
                 
-                <div className="showWhenHovering">
+                <div className="show-when-hovering">
 
                     { !isSelected &&
-                    <Button className="buttonField" onClick={() => this.onSelectImage(img)}>
-                        <span className="showWhenHovering--on">
+                    <Button className="button-field" onClick={() => this.onSelectImage(img)}>
+                        <span className="show-when-hovering--on">
                             Select
                         </span>
                     </Button>
                     }
 
                     { isSelected &&
-                    <Button className="buttonField" onClick={() => this.removeImageFromSelected(img)}>
-                        <span className="showWhenHovering--on">
+                    <Button className="button-field" onClick={() => this.removeImageFromSelected(img)}>
+                        <span className="show-when-hovering--on">
                            Remove 
                         </span>
                     </Button>
@@ -560,7 +560,7 @@ class App extends Component {
                 </Paper>
     
 
-                <div className="imageList">
+                <div className="image-list">
                     <Grid container spacing={16}>
                         {imageList}
                     </Grid>
