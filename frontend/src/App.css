@@ -1,11 +1,19 @@
-.topBar {
+.top-bar {
     margin-bottom: 16px;
 }
 
-.topBar .searchField {
+.top-bar .search-field {
     margin: auto;
     width: 66%;
     padding: 1%;
+}
+
+.top-bar .search-field .bar-icon {
+    width: 1em;
+}
+
+.top-bar .search-field .search-field {
+    width: calc(100% - 2em);
 }
 
 .imageList {

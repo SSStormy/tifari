@@ -7,6 +7,7 @@ import TifariAPI from "./APIComms.js";
 import {ldebug, assert} from "./Logging.js";
 
 import CssBaseline from '@material-ui/core/CssBaseline';
+import IconButton from '@material-ui/core/IconButton';
 import Icon from '@material-ui/core/Icon';
 import Snackbar from '@material-ui/core/Snackbar';
 import Grid from '@material-ui/core/Grid';
@@ -23,6 +24,7 @@ import Paper from '@material-ui/core/Paper';
 import GridListTile from '@material-ui/core/GridListTile';
 import GridList from '@material-ui/core/GridList';
 import ButtonBase from '@material-ui/core/ButtonBase';
+import Drawer from '@material-ui/core/Drawer';
 
 class StateMutator {
     constructor(app, oldState) {
@@ -519,31 +521,42 @@ class App extends Component {
                     />
                 }
                 
-                <Paper className="topBar">
-                <div className="searchField">
-                    <TextField
-                        fullWidth = {true}
-                        autoFocus = {true}
-                        helperText = "Tags"
-                        type = "text"
-                        ref = {this.refSearchBar}
-                        onChange = {ev => this.doImageSearch(ev.target.value.trim())}
-                    />
-                    <Button onClick={this.foreignViewToBeTaggedList}>
-                        To-Tag List({this.state.tagQueueSize})
-                    </Button>
-                    <Button 
-                        onClick={() => TifariAPI.reloadRoot().then(
-                            () => this.mutateState(mut => mut.showSnackbar("Reloaded images")))}
-                        >
-                        Reload Images
-                    </Button>
+                <Paper className="top-bar">
 
-                    <Button onClick={this.foreignToggleTagListDisplay}>
-                        {this.state.displayTagList ? "Hide" : "Show"} tag list
-                    </Button>
+                    <div className="search-field">
 
-                </div>
+                            <IconButton className="bar-icon"
+                                color="inherit"
+                                aria-label="open drawer"
+                                onClick={() => {}}
+                            >
+                                <Icon>menu</Icon>
+                            </IconButton>
+
+                            <TextField className="search-field"
+                                autoFocus = {true}
+                                helperText = "Tags"
+                                type = "text"
+                                ref = {this.refSearchBar}
+                                onChange = {ev => this.doImageSearch(ev.target.value.trim())}
+                            />
+                
+                        <Button onClick={this.foreignViewToBeTaggedList}>
+                            To-Tag List({this.state.tagQueueSize})
+                        </Button>
+                        <Button 
+                            onClick={() => TifariAPI.reloadRoot().then(
+                                () => this.mutateState(mut => mut.showSnackbar("Reloaded images")))}
+                            >
+                            Reload Images
+                        </Button>
+
+                        <Button onClick={this.foreignToggleTagListDisplay}>
+                            {this.state.displayTagList ? "Hide" : "Show"} tag list
+                        </Button>
+
+                    </div>
+
                 </Paper>
     
 
@@ -561,7 +574,7 @@ class App extends Component {
                         'aria-describedby': 'message-id',
                     }}
                     message={<span id="message-id">{this.state.snackbarMessage}</span>}
-             />
+                />
                
             </React.Fragment>
         );
