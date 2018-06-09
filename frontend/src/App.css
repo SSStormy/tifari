@@ -1,9 +1,24 @@
-.App {
-    text-align: center;
-    background-color: #fdfdfd;
+.centered {
+    margin: auto;
+    width: 66%;
+    padding: 1%;
 }
 
-.App header {
-    background-color: #1f1f1f;
-    padding: 3%;
+.imageList {
+    padding-left: 16px;
+    padding-right: 16px;
+    width: 100%;
 }
+
+.imageField {
+    height: 100%;
+
+    /* Center contents */
+    display: flex;
+    justify-content: center;
+}
+
+.imageField img {
+    height: 100%;
+}
+

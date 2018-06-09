@@ -1,10 +1,24 @@
 import React, { Component } from 'react';
 import './App.css';
-import ImageSlot from './ImageSlot.js';
+
 import ImageEditor from './ImageEditor.js';
 import {TagList, defaultTagOrdering} from './TagList.js';
 import TifariAPI from "./APIComms.js";
 import {ldebug, assert} from "./Logging.js";
+
+import CssBaseline from '@material-ui/core/CssBaseline';
+import Grid from '@material-ui/core/Grid';
+import Button from '@material-ui/core/Button';
+import AppBar from '@material-ui/core/AppBar';
+import TextField from '@material-ui/core/TextField';
+import Card from '@material-ui/core/Card';
+import CardMedia from '@material-ui/core/CardMedia';
+import CardContent from '@material-ui/core/CardContent';
+import CardActions from '@material-ui/core/CardActions';
+import Typography from '@material-ui/core/Typography';
+import Paper from '@material-ui/core/Paper';
+import GridListTile from '@material-ui/core/GridListTile';
+import GridList from '@material-ui/core/GridList';
 
 class StateMutator {
     constructor(app, oldState) {
@@ -20,24 +34,6 @@ class StateMutator {
 
     getOldState() {
         return this.oldState;
-    }
-
-    renderImageList() {
-        ldebug("Rendering image list");
-
-        let images = this.getQueriedImagesAndMarkMutated();
-
-        let mappedImages = images.map(img => 
-            <ImageSlot 
-                img={img} 
-                key={img.id} 
-                onClick={() => this.app.onSelectImage(img)}
-            />
-        );
-
-        this.newState.queriedImagesAsElements = mappedImages;
-
-        return this;
     }
 
     setTags(tags) {
@@ -231,7 +227,6 @@ class App extends Component {
 
         this.state = {
             queriedImages: [],
-            queriedImagesAsElements: [],
             isInToTagList: false,
             selectedImages: [],
             displayTagList: false,
@@ -301,7 +296,6 @@ class App extends Component {
                 this.mutateState(mut =>
                     mut.setSearchTags(tags)
                        .setImageList(images)
-                       .renderImageList()
                        .setIsInToBeTaggedList(false))
                 );
     }
@@ -348,7 +342,6 @@ class App extends Component {
 
         this.mutateState(mut => {
 
-            let rerender = false;
             mut.getOldState().selectedImages
                 .forEach(image => {
 
@@ -358,13 +351,9 @@ class App extends Component {
                         mut.addImageToList(image);
                     } else if(!this.doTagsMatchSearch(image.tags)) {
                         mut.removeImageFromList(image);
-                        rerender = true;
                     }
 
                 });
-    
-            if(rerender);
-               mut.renderImageList();
         });
 
         this.updateTagList();
@@ -385,25 +374,18 @@ class App extends Component {
                         img => mut.addTagToImage(img, tag))
                 );
 
-                let rerender = false;
-
                 // if we're in the to tag list, remove all the selected images
                 // since we just added tags to those images.
                 if(mut.getOldState().isInToTagList) {
                     mut.getOldState().selectedImages
                         .forEach(img => mut.removeImageFromList(img));
-                    rerender = true;
                 } else {
                     mut.getOldState().selectedImages.forEach(img =>{
                         if(this.doTagsMatchSearch(img.tags)) {
                             mut.addImageToList(img);
-                            rerender = true;
                         }
                     });
                 }
-
-                if(rerender)
-                    mut.renderImageList();
             })
         );
 
@@ -420,7 +402,6 @@ class App extends Component {
             .then(images =>
                 this.mutateState(mut => 
                     mut.setImageList(images)
-                        .renderImageList()
                         .setIsInToBeTaggedList(true))
             );
     }
@@ -450,8 +431,23 @@ class App extends Component {
 
         ldebug("Rendering");
 
+        const imageList = this.state.queriedImages.map(img => 
+            <Grid item xs={6}>
+            <Card square={true} elevation={5} className="imageField">
+
+                <img
+                    src={TifariAPI.getImageUrl(img)}
+                    title={img.path}
+                />
+
+            </Card>
+            </Grid>
+        );
+
         return (
-            <div className="App">
+            <React.Fragment>
+            <CssBaseline/>
+
                 {this.state.selectedImages.length > 0 &&
                     <ImageEditor 
                         images = {this.state.selectedImages}
@@ -469,31 +465,59 @@ class App extends Component {
                     />
                 }
 
-                <header>
-
-                    <button onClick={this.foreignViewToBeTaggedList}>
-                        View To-Tag List({this.state.tagQueueSize})
-                    </button>
-
-                    <button onClick={() => TifariAPI.reloadRoot()}>
-                        Reload images
-                    </button>
-            
-                    <button onClick={this.foreignToggleTagListDisplay}>
-                        {this.state.displayTagList ? "Hide" : "Show"} tag list
-                    </button>
-
-                    <input
+                <div className="centered">
+                    <TextField
+                        fullWidth = {true}
+                        autoFocus = {true}
+                        helperText = "Tags"
                         type = "text"
                         ref = {this.refSearchBar}
                         onChange = {ev => this.doImageSearch(ev.target.value.trim())}
                     />
-                </header>
+                    <Button onClick={this.foreignViewToBeTaggedList}>
+                        To-Tag list 
+                    </Button>
+                </div>
+    
 
-                <ul>{this.state.queriedImagesAsElements}</ul>
-            </div>
+                <div className="imageList">
+                    <Grid container spacing={16}>
+                        {imageList}
+                    </Grid>
+                </div>
+               
+            </React.Fragment>
         );
     }
 }
+
+/*
+ 
+                <AppBar color = "primary">
+                    <Button color = "inherit"
+                            onClick={this.foreignViewToBeTaggedList}
+                        >
+                        View To-Tag List({this.state.tagQueueSize})
+                    </Button>
+
+                    <Button color = "inherit"
+                            onClick={() => TifariAPI.reloadRoot()}>
+                        Reload images
+                    </Button>
+            
+                    <Button onClick={this.foreignToggleTagListDisplay}>
+                        {this.state.displayTagList ? "Hide" : "Show"} tag list
+                    </Button>
+
+                    <TextField
+                        autoFocus = {true}
+                        id = "Search by tag"
+                        type = "text"
+                        ref = {this.refSearchBar}
+                        onChange = {ev => this.doImageSearch(ev.target.value.trim())}
+                    />
+                </AppBar>
+
+ */
 
 export default App;
