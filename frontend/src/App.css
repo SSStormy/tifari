@@ -23,6 +23,11 @@
     justify-content: center;
 }
 
+.imageField .checkmark {
+    position: absolute;
+    top: 50%;
+}
+
 .imageField .buttonField {
     position: absolute;
     bottom: 0;

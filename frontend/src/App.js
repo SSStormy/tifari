@@ -7,6 +7,7 @@ import TifariAPI from "./APIComms.js";
 import {ldebug, assert} from "./Logging.js";
 
 import CssBaseline from '@material-ui/core/CssBaseline';
+import Icon from '@material-ui/core/Icon';
 import Snackbar from '@material-ui/core/Snackbar';
 import Grid from '@material-ui/core/Grid';
 import Button from '@material-ui/core/Button';
@@ -254,7 +255,7 @@ class App extends Component {
 
         this.refSearchBar = React.createRef();
 
-        this.foreignRemoveImageFromSelected = this.foreignRemoveImageFromSelected.bind(this);
+        this.removeImageFromSelected        = this.removeImageFromSelected.bind(this);
         this.foreignSetTagListOrdering      = this.foreignSetTagListOrdering.bind(this);
         this.foreignToggleTagListDisplay    = this.foreignToggleTagListDisplay.bind(this);
         this.foreignEscKeyListener          = this.foreignEscKeyListener.bind(this);
@@ -439,33 +440,63 @@ class App extends Component {
         this.doImageSearch(search.value);
     }
 
-    foreignRemoveImageFromSelected(image) {
+    removeImageFromSelected(image) {
         this.mutateState(mut => mut.removeSelectedImage(image));
+    }
+
+    isImageSelected(image) {
+        return -1 !== this.state.selectedImages.findIndex(i => i.id === image.id);
     }
 
     render() {
 
         ldebug("Rendering");
 
-        const imageList = this.state.queriedImages.map(img => 
+        const imageList = this.state.queriedImages.map(img => {
+            
+            let isSelected = this.isImageSelected(img);
+            return(
             <Grid item xs={6}>
+
             <Card square={true} elevation={5} className="imageField">
-                <img
+                
+                <img style={{opacity: isSelected ? 0.5 : 1}}
                     src={TifariAPI.getImageUrl(img)}
                     title={img.path}
                 />
 
+                { isSelected && 
+                <Icon 
+                    className="checkmark" 
+                    style={{fontSize: 48}}
+                    >
+                    done_outline
+                </Icon>
+                }
+                
                 <div className="showWhenHovering">
+
+                    { !isSelected &&
                     <Button className="buttonField" onClick={() => this.onSelectImage(img)}>
                         <span className="showWhenHovering--on">
-                            Edit
+                            Select
                         </span>
                     </Button>
+                    }
+
+                    { isSelected &&
+                    <Button className="buttonField" onClick={() => this.removeImageFromSelected(img)}>
+                        <span className="showWhenHovering--on">
+                           Remove 
+                        </span>
+                    </Button>
+                    }
                 </div>
 
             </Card>
             </Grid>
-        );
+            );
+        });
 
         return (
             <React.Fragment>
