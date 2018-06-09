@@ -11,6 +11,7 @@ import Snackbar from '@material-ui/core/Snackbar';
 import Grid from '@material-ui/core/Grid';
 import Button from '@material-ui/core/Button';
 import AppBar from '@material-ui/core/AppBar';
+import Toolbar from '@material-ui/core/Toolbar';
 import TextField from '@material-ui/core/TextField';
 import Card from '@material-ui/core/Card';
 import CardMedia from '@material-ui/core/CardMedia';
@@ -478,8 +479,9 @@ class App extends Component {
                         callbackAddTag = {this.foreignAddTagToSearch}
                     />
                 }
-
-                <div className="centered">
+                
+                <Paper className="topBar">
+                <div className="searchField">
                     <TextField
                         fullWidth = {true}
                         autoFocus = {true}
@@ -503,6 +505,7 @@ class App extends Component {
                     </Button>
 
                 </div>
+                </Paper>
     
 
                 <div className="imageList">

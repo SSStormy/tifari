@@ -1,4 +1,8 @@
-.centered {
+.topBar {
+    margin-bottom: 16px;
+}
+
+.topBar .searchField {
     margin: auto;
     width: 66%;
     padding: 1%;
