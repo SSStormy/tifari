@@ -7,6 +7,7 @@ import TifariAPI from "./APIComms.js";
 import {ldebug, assert} from "./Logging.js";
 
 import CssBaseline from '@material-ui/core/CssBaseline';
+import Snackbar from '@material-ui/core/Snackbar';
 import Grid from '@material-ui/core/Grid';
 import Button from '@material-ui/core/Button';
 import AppBar from '@material-ui/core/AppBar';
@@ -46,6 +47,19 @@ class StateMutator {
 
     setTagOrdering(ordering) {
         this.newState.tagOrdering = ordering;
+        return this;
+    }
+
+    showSnackbar(msg) {
+        this.newState.showSnackbar = true;
+        this.newState.snackbarMessage = msg;
+
+        return this;
+    }
+
+    hideSnackbar() {
+        this.newState.showSnackbar = false;
+
         return this;
     }
 
@@ -475,8 +489,19 @@ class App extends Component {
                         onChange = {ev => this.doImageSearch(ev.target.value.trim())}
                     />
                     <Button onClick={this.foreignViewToBeTaggedList}>
-                        To-Tag list 
+                        To-Tag List({this.state.tagQueueSize})
                     </Button>
+                    <Button 
+                        onClick={() => TifariAPI.reloadRoot().then(
+                            () => this.mutateState(mut => mut.showSnackbar("Reloaded images")))}
+                        >
+                        Reload Images
+                    </Button>
+
+                    <Button onClick={this.foreignToggleTagListDisplay}>
+                        {this.state.displayTagList ? "Hide" : "Show"} tag list
+                    </Button>
+
                 </div>
     
 
@@ -485,39 +510,20 @@ class App extends Component {
                         {imageList}
                     </Grid>
                 </div>
+
+                <Snackbar
+                    open={this.state.showSnackbar}
+                    anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
+                    onClose={() => this.mutateState(mut => mut.hideSnackbar())}
+                    ContentProps={{
+                        'aria-describedby': 'message-id',
+                    }}
+                    message={<span id="message-id">{this.state.snackbarMessage}</span>}
+             />
                
             </React.Fragment>
         );
     }
 }
-
-/*
- 
-                <AppBar color = "primary">
-                    <Button color = "inherit"
-                            onClick={this.foreignViewToBeTaggedList}
-                        >
-                        View To-Tag List({this.state.tagQueueSize})
-                    </Button>
-
-                    <Button color = "inherit"
-                            onClick={() => TifariAPI.reloadRoot()}>
-                        Reload images
-                    </Button>
-            
-                    <Button onClick={this.foreignToggleTagListDisplay}>
-                        {this.state.displayTagList ? "Hide" : "Show"} tag list
-                    </Button>
-
-                    <TextField
-                        autoFocus = {true}
-                        id = "Search by tag"
-                        type = "text"
-                        ref = {this.refSearchBar}
-                        onChange = {ev => this.doImageSearch(ev.target.value.trim())}
-                    />
-                </AppBar>
-
- */
 
 export default App;
