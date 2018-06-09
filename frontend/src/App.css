@@ -2,10 +2,21 @@
     margin-bottom: 16px;
 }
 
-.top-bar .search-field {
+.top-bar .center-field {
     margin: auto;
     width: 66%;
-    padding: 1%;
+    display: flex;
+    justify-content: center;
+}
+
+.top-bar .search {
+    display: flex;
+    margin-left: auto;
+    margin-right: auto;
+    margin-top: auto;
+    width: 66%;
+    justify-content: center;
+    margin-bottom: 64px;
 }
 
 .top-bar .search-field .bar-icon {

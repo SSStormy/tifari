@@ -8,6 +8,8 @@ import {ldebug, assert} from "./Logging.js";
 
 import CssBaseline from '@material-ui/core/CssBaseline';
 import IconButton from '@material-ui/core/IconButton';
+import Tabs from '@material-ui/core/Tabs';
+import Tab from '@material-ui/core/Tab';
 import Icon from '@material-ui/core/Icon';
 import Snackbar from '@material-ui/core/Snackbar';
 import Grid from '@material-ui/core/Grid';
@@ -199,6 +201,12 @@ class StateMutator {
         return this;
     }
 
+    setTabState(state) {
+        this.newState.tabState = state;
+
+        return this;
+    }
+
     clearSelectedImages() {
         ldebug("Clearing selected images");
 
@@ -253,10 +261,14 @@ class App extends Component {
             searchTagNames: [],
             tags: [],
             tagOrdering: defaultTagOrdering,
+            tabState: 0,
         };
 
         this.refSearchBar = React.createRef();
 
+        this.foreignShowSearchTab = this.foreignShowSearchTab.bind(this);
+        this.foreignShowToBeTaggedTab = this.foreignShowToBeTaggedTab.bind(this);
+        this.foreignShowSelectedTab = this.foreignShowSelectedTab.bind(this);
         this.removeImageFromSelected        = this.removeImageFromSelected.bind(this);
         this.foreignSetTagListOrdering      = this.foreignSetTagListOrdering.bind(this);
         this.foreignToggleTagListDisplay    = this.foreignToggleTagListDisplay.bind(this);
@@ -317,6 +329,15 @@ class App extends Component {
                        .setImageList(images)
                        .setIsInToBeTaggedList(false))
                 );
+    }
+
+    foreignShowSearchTab() { 
+    }
+
+    foreignShowToBeTaggedTab() { 
+    }
+
+    foreignShowSelectedTab() { 
     }
 
     updateToBeTaggedListSize() {
@@ -522,43 +543,30 @@ class App extends Component {
                 }
                 
                 <Paper className="top-bar">
+                    
+                    <Tabs className="center-field"
+                        value={this.state.tabState} 
+                        onChange={(e, v) => this.mutateState(mut => mut.setTabState(v))}
+                        >
 
-                    <div className="search-field">
+                        <Tab label="Search" onClick={this.foreignShowSearchTab}/>
+                        <Tab label={`To-be tagged (${this.state.tagQueueSize})`} onClick={this.foreignShowToBeTaggedTab}/>
+                        <Tab label="Selected" onClick={this.foreignShowSelectedTab}/>
+                    </Tabs>
 
-                            <IconButton className="bar-icon"
-                                color="inherit"
-                                aria-label="open drawer"
-                                onClick={() => {}}
-                            >
-                                <Icon>menu</Icon>
-                            </IconButton>
-
-                            <TextField className="search-field"
-                                autoFocus = {true}
-                                helperText = "Tags"
-                                type = "text"
-                                ref = {this.refSearchBar}
-                                onChange = {ev => this.doImageSearch(ev.target.value.trim())}
-                            />
-                
-                        <Button onClick={this.foreignViewToBeTaggedList}>
-                            To-Tag List({this.state.tagQueueSize})
-                        </Button>
-                        <Button 
-                            onClick={() => TifariAPI.reloadRoot().then(
-                                () => this.mutateState(mut => mut.showSnackbar("Reloaded images")))}
-                            >
-                            Reload Images
-                        </Button>
-
-                        <Button onClick={this.foreignToggleTagListDisplay}>
-                            {this.state.displayTagList ? "Hide" : "Show"} tag list
-                        </Button>
-
-                    </div>
-
+                    { this.state.tabState === 0 &&
+                        <div>
+                        <TextField 
+                            className="center-field"
+                            autoFocus = {true}
+                            helperText = "Tags"
+                            type = "text"
+                            ref = {this.refSearchBar}
+                            onChange = {ev => this.doImageSearch(ev.target.value.trim())}
+                        />
+                        </div>
+                    }
                 </Paper>
-    
 
                 <div className="image-list">
                     <Grid container spacing={16}>
@@ -575,10 +583,48 @@ class App extends Component {
                     }}
                     message={<span id="message-id">{this.state.snackbarMessage}</span>}
                 />
-               
+
             </React.Fragment>
         );
     }
 }
+/*
+ 
+
+                    <div className="search-field">
+
+                        <IconButton 
+                            className="bar-icon"
+                            color="inherit"
+                            aria-label="open drawer"
+                            onClick={() => {}}
+                            >
+
+                            <Icon>menu</Icon>
+                        </IconButton>
+
+
+
+                    </div>
+
+                </Paper>
+    
+
+
+                         <Button onClick={this. onClick=foreignViewToBeTaggedList}>
+                            To-Tag List({this.state.tagQueueSize})
+                        </Button>
+                        <Button 
+                            onClick={() => TifariAPI.reloadRoot().then(
+                                () => this.mutateState(mut => mut.showSnackbar("Reloaded images")))}
+                            >
+                            Reload Images
+                        </Button>
+
+                        <Button onClick={this.foreignToggleTagListDisplay}>
+                            {this.state.displayTagList ? "Hide" : "Show"} tag list
+                        </Button>
+
+ */
 
 export default App;
