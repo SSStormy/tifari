@@ -519,16 +519,20 @@ class App extends Component {
                             label="Search" 
                             onClick={this.foreignShowSearchTab}
                         />
-                
+                        
+                        { this.state.tagQueueSize > 0 &&
                         <Tab 
                             label={`To-be tagged (${this.state.tagQueueSize})`} 
                             onClick={this.foreignShowToBeTaggedTab}
                         />
-
+                        }
+                        
+                        { this.state.selectedImages.length > 0 &&
                         <Tab 
                             label={`Selected (${this.state.selectedImages.length})`} 
                             onClick={this.foreignShowSelectedTab}
                         />
+                        }
 
                     </Tabs>
 
