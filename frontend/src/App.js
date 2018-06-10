@@ -27,6 +27,7 @@ import GridListTile from '@material-ui/core/GridListTile';
 import GridList from '@material-ui/core/GridList';
 import ButtonBase from '@material-ui/core/ButtonBase';
 import Drawer from '@material-ui/core/Drawer';
+import Chip from '@material-ui/core/Chip';
 
 class StateMutator {
     constructor(app, oldState) {
@@ -232,7 +233,8 @@ class App extends Component {
             tagOrdering: defaultTagOrdering,
             tabState: 0,
         };
-
+        this.foreignOnSelectImage = this.foreignOnSelectImage.bind(this);
+        this.foreignRemoveImageFromSelected = this.foreignRemoveImageFromSelected.bind(this);
         this.foreignShowSearchTab = this.foreignShowSearchTab.bind(this);
         this.foreignShowToBeTaggedTab = this.foreignShowToBeTaggedTab.bind(this);
         this.foreignShowSelectedTab = this.foreignShowSelectedTab.bind(this);
@@ -285,7 +287,7 @@ class App extends Component {
     }
 
     // callback that's called when we want to select an image
-    onSelectImage(img) {
+    foreignOnSelectImage(img) {
         this.mutateState(mut => {
             mut.addImageToList(IMGS_SELECTED, img);
         })
@@ -358,17 +360,7 @@ class App extends Component {
         this.mutateState(mut => {
 
             mut.getOldState().selectedImages
-                .forEach(image => {
-
-                    mut.removeTagFromImage(image, tag);
-
-                    if(mut.getOldState().isInToTagList && 0 >= image.tags.length) {
-                        mut.addImageToList(image);
-                    } else if(!this.doTagsMatchSearch(image.tags)) {
-                        mut.removeImageFromList(image);
-                    }
-
-                });
+                .forEach(image => this.localBookkeepTagRemoval(mut, image, tag));
         });
 
         this.updateTagList();
@@ -429,7 +421,7 @@ class App extends Component {
         this.doImageSearch(search.value);
     }
 
-    removeImageFromSelected(image) {
+    foreignRemoveImageFromSelected(image) {
         this.mutateState(mut => mut.removeImageFromList(IMGS_SELECTED, image));
     }
 
@@ -441,36 +433,9 @@ class App extends Component {
         return this.state.activeImageListEnum.id == IMGS_SELECTED.id;
     }
 
-    render() {
-
-        ldebug("Rendering");
-
-        const activeImageList = this.state[this.state.activeImageListEnum.prop];
-        const imageList = activeImageList.map(img => {
-            
-
-            let isSelected = this.isImageSelected(img);
-            let drawSelectedMods = isSelected && !this.isViewingSelectedImages();
-
-            return(
-            <Grid item xs={6} key={img.id}>
-
-            <Card square={true} elevation={5} className="image-field">
-                
-                <img style={{opacity: drawSelectedMods ? 0.5 : 1}}
-                    src={TifariAPI.getImageUrl(img)}
-                    title={img.path}
-                />
-
-                { drawSelectedMods &&
-                <Icon 
-                    className="checkmark" 
-                    style={{fontSize: 48}}
-                    >
-                    done_outline
-                </Icon>
-                }
-                
+    /*
+     
+                            
                 <div className="show-when-hovering">
 
                     { !isSelected &&
@@ -490,8 +455,112 @@ class App extends Component {
                     }
                 </div>
 
-            </Card>
-            </Grid>
+
+                         <Icon 
+                            className="checkmark" 
+                            style={{fontSize: 48}}
+                        >
+                            <span className="show-when-hovering--on">
+                                done_outline
+                            </span>
+                        </Icon>
+
+
+     */
+
+    
+    removeTagFrom(image, tag) {
+        TifariAPI.removeTags([tag.id], [image.id]);
+
+        this.mutateState(mut => {
+            this.localBookkeepTagRemoval(mut, image, tag);
+        });
+
+        this.updateTagList();
+        this.updateToBeTaggedListSize();
+
+    }
+
+    localBookkeepTagRemoval(mut, image, tag) {
+        mut.removeTagFromImage(image, tag);
+
+        if(mut.getOldState().isInToTagList && 0 >= image.tags.length) {
+            mut.addImageToList(image);
+        } else if(!this.doTagsMatchSearch(image.tags)) {
+            mut.removeImageFromList(image);
+        }
+    }
+
+    render() {
+
+        ldebug("Rendering");
+
+        const activeImageList = this.state[this.state.activeImageListEnum.prop];
+        const imageList = activeImageList.map(img => {
+
+            const isSelected = this.isImageSelected(img);
+            const drawSelectedMods = isSelected && !this.isViewingSelectedImages();
+            const tagList = img.tags.map(tag => 
+                <Chip 
+                    className="chip"
+                    key={tag.id} 
+                    label={tag.name}
+                    onDelete={() => this.removeTagFrom(img, tag)}
+                />
+            );
+
+            const clickFunc = (img) => { 
+                (isSelected 
+                    ? this.foreignRemoveImageFromSelected 
+                    : this.foreignOnSelectImage)(img); 
+            }
+
+            return (
+                <Grid item xs={6} key={img.id}>
+
+                    <Card 
+                        square={true} 
+                        elevation={5} 
+                        className="card show-when-hovering"
+                        onClick={() => clickFunc(img)}
+                        >
+
+                        <img style={{opacity: drawSelectedMods ? 0.5 : 1}}
+                            src={TifariAPI.getImageUrl(img)}
+                            title={img.path}
+                        />
+
+                        { drawSelectedMods &&
+                        <Icon 
+                            className="checkmark" 
+                            style={{fontSize: 48}}
+                            >
+                            done_outline
+                        </Icon>
+                        }
+
+
+                        { /* TODO: test vertical overflow for tag chips*/ }
+                        <div className="bottom-bar show-when-hovering--on">
+                            <Paper square={true} className="paper">  
+                                {tagList}
+                                <div className="input-field">
+                                    <TextField 
+                                        style={{paddingRight: 8}}
+                                        type="text"
+                                    />
+                                    <Button variant="fab" className="add-button">
+                                        <Icon>add</Icon>
+                                    </Button>
+                                </div>
+                                
+                            </Paper>
+                        </div>
+                        
+                    </Card>
+
+
+                </Grid>
             );
         });
 

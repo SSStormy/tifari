@@ -23,7 +23,16 @@
     width: 100%;
 }
 
-.image-list .image-field {
+.show-when-hovering .show-when-hovering--on,
+.show-when-hovering:hover .show-when-hovering--off {
+    display: none;
+}
+
+.show-when-hovering:hover .show-when-hovering--on {
+    display: inline;
+}
+
+.image-list .card {
     height: 100%;
     position: relative;
 
@@ -32,28 +41,45 @@
     justify-content: center;
 }
 
-.image-list .image-field img {
+.image-list .card img {
     height: 100%;
 }
 
-.image-list .image-field .checkmark {
+.image-list .card .bottom-bar {
+    position: absolute;
+    width: 100%;
+    bottom: 0;
+}
+
+.image-list .card .bottom-bar .paper {
+    position: absolute;
+    width: 100%;
+    bottom: 0;
+    padding: 4px;
+}
+
+.image-list .card .bottom-bar .paper .chip {
+    margin-top: 2px;
+}
+
+.image-list .card .bottom-bar .paper .input-field {
+    float: right;
+}
+
+.image-list .card .bottom-bar .paper .add-button {
+    width: 1.5em;
+    height: 1em;
+}
+
+.image-list .card .checkmark {
     position: absolute;
     top: 50%;
 }
 
-.image-list .image-field .button-field {
+.image-list .card .button-field {
     position: absolute;
     bottom: 0;
     top: 0;
     right: 0;
-}
-
-.show-when-hovering .show-when-hovering--on,
-.show-when-hovering:hover .show-when-hovering--off {
-  display: none;
-}
-
-.show-when-hovering:hover .show-when-hovering--on {
-  display: inline;
 }
 
