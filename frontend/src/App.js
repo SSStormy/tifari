@@ -29,7 +29,20 @@ import ButtonBase from '@material-ui/core/ButtonBase';
 import Drawer from '@material-ui/core/Drawer';
 import Chip from '@material-ui/core/Chip';
 
-class TagList extends Component{
+class TagList extends Component {
+
+    constructor(props) {
+        super(props);
+
+        this.state = {
+            textField: "",
+        };
+    }
+
+    submitTabInput() {
+        this.props.onAdd(this.state.textField);
+        this.setState({textField: ""});
+    }
 
     render() {
 
@@ -47,17 +60,19 @@ class TagList extends Component{
 
                 <span className="input-field">
                     <TextField
+                        value={this.state.textField}
                         id="tag-input"
                         label="Add tags"
                         style={{paddingRight: 8}}
+                        onChange={(e) => this.setState({textField: e.target.value})}
                         type="text"
-
                     />
                 </span>
 
                 <Button 
                     variant="fab" 
                     className="add-button"
+                    onClick={() => this.submitTabInput()}
                     >
                     <Icon>add</Icon>
                 </Button>
@@ -226,7 +241,7 @@ class StateMutator {
         ldebug(query);
         ldebug(tagsArray);
         this.newState.searchInput = query;
-        this.newState.searchTagNames = tagsArray;
+        this.newState.searchTagNameSet = new Set(tagsArray);
         return this;
     }
 
@@ -251,6 +266,10 @@ const IMGS_SEARCH   = {id: 0, prop: "searchImages" }
 const IMGS_TO_TAG   = {id: 1, prop: "toBeTaggedImages" }
 const IMGS_SELECTED = {id: 2, prop: "selectedImages" }
 
+const TABS_SEARCH = 0;
+const TABS_TO_TAG = 1;
+const TABS_SELECTED = 2;
+
 class App extends Component {
 
     constructor(props) {
@@ -264,21 +283,19 @@ class App extends Component {
 
             displayTagList: false,
             tagQueueSize: 0,
-            searchTagNames: [],
+            searchTagNameSet: new Set(),
             searchInput: "",
             tags: [],
             tagOrdering: defaultTagOrdering,
             tabState: 0,
         };
+
         this.foreignShowSearchTab = this.foreignShowSearchTab.bind(this);
         this.foreignShowToBeTaggedTab = this.foreignShowToBeTaggedTab.bind(this);
         this.foreignShowSelectedTab = this.foreignShowSelectedTab.bind(this);
         this.foreignSetTagListOrdering      = this.foreignSetTagListOrdering.bind(this);
         this.foreignToggleTagListDisplay    = this.foreignToggleTagListDisplay.bind(this);
         this.foreignEscKeyListener          = this.foreignEscKeyListener.bind(this);
-
-        this.foreignOnEditorRemoveTagFromSelected = this.foreignOnEditorRemoveTagFromSelected.bind(this);
-        this.foreignOnEditorAddTagToSelected = this.foreignOnEditorAddTagToSelected.bind(this);
         this.foreignAddTagToSearch = this.foreignAddTagToSearch.bind(this);
     }
 
@@ -329,7 +346,7 @@ class App extends Component {
 
     // callback that's called when we want to search the backend for tags
     doImageSearch(query) {
-        let tags = query.split(" ");
+        let tags = query.trim().split(" ");
 
         TifariAPI.search(tags)
             .then(images =>
@@ -373,19 +390,23 @@ class App extends Component {
     }
 
     doTagsMatchSearch(tags) {
-        // searchTagNames and tags should intersect.
+        let searchTags= this.state.searchTagNameSet;
+        
+        if(searchTags.size <= 0)
+            return false;
 
-        const intersection = this.state.searchTagNames.filter(
-            tagName => tags.findIndex(tag => tag.name === tagName) !== -1);
+        let imageTags = new Set(tags.map(t => t.name));
+    
+        for(let item of searchTags) {
+            if(!imageTags.has(item))
+                return false;
+        }
 
-        ldebug("Intersecting tags:");
-        ldebug(tags);
-
-        return intersection.length > 0;
+        return true;
     }
 
     // callback that's called when we remove a tag from an image
-    foreignOnEditorRemoveTagFromSelected(tag) {
+    removeTagFromSelected(tag) {
 
         let imageIds = this.state.selectedImages.map(img => img.id);
 
@@ -402,32 +423,14 @@ class App extends Component {
     }
     
     // callback that's called whenever we add a tag to an image
-    foreignOnEditorAddTagToSelected(tagNames) { 
-
+    addTagsToSelected(tagString) { 
+        let tagNames = tagString.trim().split(" ");
         let imageIds = this.state.selectedImages.map(img => img.id);
 
         TifariAPI.addTags(tagNames, imageIds)
-            .then(tags => this.mutateState(mut => {
-
-                // add each tag to each image
-                tags.forEach(
-                    tag => mut.getOldState().selectedImages.forEach(
-                        img => mut.addTagToImage(img, tag))
-                );
-
-                // if we're in the to tag list, remove all the selected images
-                // since we just added tags to those images.
-                if(mut.getOldState().isInToTagList) {
-                    mut.getOldState().selectedImages
-                        .forEach(img => mut.removeImageFromList(img));
-                } else {
-                    mut.getOldState().selectedImages.forEach(img =>{
-                        if(this.doTagsMatchSearch(img.tags)) {
-                            mut.addImageToList(img);
-                        }
-                    });
-                }
-            })
+            .then(tags => this.mutateState(mut => 
+                this.localBookkeepTagsAdd(mut, mut.getOldState().selectedImages, tags)
+            )
         );
 
         this.updateTagList();
@@ -440,7 +443,7 @@ class App extends Component {
 
     foreignAddTagToSearch(tag) {
 
-        if(this.state.searchTagNames.findIndex(t => t === tag.name) !== -1)
+        if(this.state.searchTagNames.has(tag.name))
             return;
 
         let search = this.refSearchBar.current;
@@ -458,8 +461,9 @@ class App extends Component {
     unselectImage(image) {
         this.mutateState(mut => { 
             mut.removeImageFromList(IMGS_SELECTED, image)
-            if(mut.getFinalState()[IMGS_SELECTED.prop].length <= 0) {
-                mut.setTabState(0);
+            if(mut.getFinalState()[IMGS_SELECTED.prop].length <= 0 
+                && mut.getOldState().tabState === TABS_SELECTED) {
+                mut.setTabState(TABS_SEARCH);
             }
         });
     }
@@ -471,42 +475,6 @@ class App extends Component {
     isViewingSelectedImages() {
         return this.state.activeImageListEnum.id == IMGS_SELECTED.id;
     }
-
-    /*
-     
-                            
-                <div className="show-when-hovering">
-
-                    { !isSelected &&
-                    <Button className="button-field" onClick={() => this.onSelectImage(img)}>
-                        <span className="show-when-hovering--on">
-                            Select
-                        </span>
-                    </Button>
-                    }
-
-                    { isSelected &&
-                    <Button className="button-field" onClick={() => this.removeImageFromSelected(img)}>
-                        <span className="show-when-hovering--on">
-                           Remove 
-                        </span>
-                    </Button>
-                    }
-                </div>
-
-
-                         <Icon 
-                            className="checkmark" 
-                            style={{fontSize: 48}}
-                        >
-                            <span className="show-when-hovering--on">
-                                done_outline
-                            </span>
-                        </Icon>
-
-
-     */
-
     
     removeTagFrom(image, tag) {
         TifariAPI.removeTags([tag.id], [image.id]);
@@ -520,13 +488,45 @@ class App extends Component {
 
     }
 
+    addTagsTo(image, tagString) {
+        let tagNames = tagString.trim().split(" ");
+
+        TifariAPI.addTags(tagNames, [image.id])
+            .then(tags => this.mutateState(mut => 
+                this.localBookkeepTagsAdd(mut, [image], tags)
+            )
+        );
+
+        this.updateTagList();
+        this.updateToBeTaggedListSize();
+
+    }
+
+    localBookkeepTagsAdd(mut, images, tags) {
+
+        // add each tag to each image
+        tags.forEach(tag => images.forEach(
+                img => mut.addTagToImage(img, tag))
+        );
+
+        images.forEach(img => { 
+            if(img.tags.length > 0)
+                mut.removeImageFromList(IMGS_TO_TAG, img);
+
+            if(this.doTagsMatchSearch(img.tags)) {
+                mut.addImageToList(IMGS_SEARCH, img);
+            }
+        });
+    }
+
     localBookkeepTagRemoval(mut, image, tag) {
         mut.removeTagFromImage(image, tag);
 
-        if(mut.getOldState().isInToTagList && 0 >= image.tags.length) {
-            mut.addImageToList(image);
+        if(0 >= image.tags.length) {
+            mut.addImageToList(IMGS_TO_TAG, image);
+            mut.removeImageFromList(IMGS_SEARCH, image);
         } else if(!this.doTagsMatchSearch(image.tags)) {
-            mut.removeImageFromList(image);
+            mut.removeImageFromList(IMGS_SEARCH, image);
         }
     }
 
@@ -576,7 +576,11 @@ class App extends Component {
 
                         <div className="bottom-bar show-when-hovering--on">
                             <Paper square={true} className="paper">
-                                <TagList tags={img.tags} onRemove={(tag) => {}}/>
+                                <TagList 
+                                    tags={img.tags} 
+                                    onAdd={(tagString) => this.addTagsTo(img, tagString)}
+                                    onRemove={(tag) => this.removeTagFrom(img, tag)}
+                                />
                             </Paper>
                         </div>
                         
@@ -586,6 +590,21 @@ class App extends Component {
                 </Grid>
             );
         });
+
+        let selectedImageTags = [];
+        if(this.state.tabState === TABS_SELECTED) {
+            let existingTagIds = new Set();
+
+            this.state.selectedImages.forEach(img => {
+                img.tags.forEach(tag => {
+                    if(existingTagIds.has(tag.id))
+                        return;
+
+                    existingTagIds.add(tag.id);
+                    selectedImageTags.push(tag);
+                })
+            })
+        }
 
         return (
             <React.Fragment>
@@ -619,22 +638,23 @@ class App extends Component {
 
                     </Tabs>
 
-                    { this.state.tabState === 0 &&
+                    { this.state.tabState === TABS_SEARCH &&
                         <TextField 
                             className="center-field"
                             autoFocus = {true}
                             label = "Search by tags"
                             type = "text"
                             value = {this.state.searchInput}
-                            onChange = {ev => this.doImageSearch(ev.target.value.trim())}
+                            onChange = {ev => this.doImageSearch(ev.target.value)}
                         />
                     }
 
-                    { this.state.tabState === 2 &&
+                    { this.state.tabState === TABS_SELECTED &&
                         <TagList 
                             className="center-field"
-                            tags={[]} 
-                            onRemove={(tag) => {}}
+                            tags={selectedImageTags}
+                            onAdd={(tagString) => this.addTagsToSelected(tagString)}
+                            onRemove={(tag) => this.removeTagFromSelected(tag)}
                         />
                     }
                 </Paper>
