@@ -539,21 +539,16 @@ class App extends Component {
                         </Icon>
                         }
 
-
-                        { /* TODO: test vertical overflow for tag chips*/ }
                         <div className="bottom-bar show-when-hovering--on">
-                            <Paper square={true} className="paper">  
+                            <Paper square={true} className="paper">
                                 {tagList}
-                                <div className="input-field">
-                                    <TextField 
+                                    <TextField
                                         style={{paddingRight: 8}}
                                         type="text"
                                     />
                                     <Button variant="fab" className="add-button">
                                         <Icon>add</Icon>
                                     </Button>
-                                </div>
-                                
                             </Paper>
                         </div>
                         

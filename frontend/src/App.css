@@ -56,6 +56,10 @@
     width: 100%;
     bottom: 0;
     padding: 4px;
+
+    overflow-x: auto;
+    overflow-y: hidden;
+    white-space: nowrap;
 }
 
 .image-list .card .bottom-bar .paper .chip {
