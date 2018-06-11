@@ -56,7 +56,9 @@ class TagList extends Component {
 
         return (
             <div className={`${this.props.className} tag-list`}>
-                {tagList}
+                <span className="chip-list">
+                    {tagList}
+                </span>
 
                 <span className="input-field">
                     <TextField

@@ -58,21 +58,6 @@
     padding: 4px;
 }
 
-.tag-list {
-    overflow-x: auto;
-    overflow-y: hidden;
-    white-space: nowrap;
-}
-
-.tag-list .input-field {
-    padding-left: 1em;
-}
-
-.tag-list .add-button {
-    width: 1.5em;
-    height: 1em;
-}
-
 .image-list .card .checkmark {
     position: absolute;
     top: 50%;
@@ -85,3 +70,22 @@
     right: 0;
 }
 
+.tag-list {
+    overflow-x: auto;
+    overflow-y: hidden;
+    white-space: nowrap;
+}
+
+.tag-list .chip-list {
+    margin-top: auto;
+    margin-bottom: auto;
+}
+
+.tag-list .input-field {
+   padding-left: 1em;
+}
+
+.tag-list .add-button {
+    width: 1.5em;
+    height: 1em;
+}
