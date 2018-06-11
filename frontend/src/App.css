@@ -67,7 +67,7 @@
 }
 
 .image-list .card .bottom-bar .paper .input-field {
-    float: right;
+    padding-left: 1em;
 }
 
 .image-list .card .bottom-bar .paper .add-button {

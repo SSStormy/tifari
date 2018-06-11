@@ -233,8 +233,6 @@ class App extends Component {
             tagOrdering: defaultTagOrdering,
             tabState: 0,
         };
-        this.foreignOnSelectImage = this.foreignOnSelectImage.bind(this);
-        this.foreignRemoveImageFromSelected = this.foreignRemoveImageFromSelected.bind(this);
         this.foreignShowSearchTab = this.foreignShowSearchTab.bind(this);
         this.foreignShowToBeTaggedTab = this.foreignShowToBeTaggedTab.bind(this);
         this.foreignShowSelectedTab = this.foreignShowSelectedTab.bind(this);
@@ -286,8 +284,7 @@ class App extends Component {
         });
     }
 
-    // callback that's called when we want to select an image
-    foreignOnSelectImage(img) {
+    selectImage(img) {
         this.mutateState(mut => {
             mut.addImageToList(IMGS_SELECTED, img);
         })
@@ -421,7 +418,7 @@ class App extends Component {
         this.doImageSearch(search.value);
     }
 
-    foreignRemoveImageFromSelected(image) {
+    unselectImage(image) {
         this.mutateState(mut => mut.removeImageFromList(IMGS_SELECTED, image));
     }
 
@@ -491,6 +488,15 @@ class App extends Component {
         }
     }
 
+    onClickedImageCard(ev, img, isSel) {
+        if(ev.target.id === "card-image") {
+            if(isSel)
+                this.unselectImage(img);
+            else
+                this.selectImage(img)
+        }
+    }
+
     render() {
 
         ldebug("Rendering");
@@ -509,12 +515,6 @@ class App extends Component {
                 />
             );
 
-            const clickFunc = (img) => { 
-                (isSelected 
-                    ? this.foreignRemoveImageFromSelected 
-                    : this.foreignOnSelectImage)(img); 
-            }
-
             return (
                 <Grid item xs={6} key={img.id}>
 
@@ -522,10 +522,11 @@ class App extends Component {
                         square={true} 
                         elevation={5} 
                         className="card show-when-hovering"
-                        onClick={() => clickFunc(img)}
+                        onClick={(ev) => this.onClickedImageCard(ev, img, isSelected)}
                         >
 
                         <img style={{opacity: drawSelectedMods ? 0.5 : 1}}
+                            id="card-image"
                             src={TifariAPI.getImageUrl(img)}
                             title={img.path}
                         />
@@ -542,11 +543,19 @@ class App extends Component {
                         <div className="bottom-bar show-when-hovering--on">
                             <Paper square={true} className="paper">
                                 {tagList}
+                                    <span className="input-field">
                                     <TextField
+                                        id="tag-input"
+                                        label="Add tags"
                                         style={{paddingRight: 8}}
                                         type="text"
+
                                     />
-                                    <Button variant="fab" className="add-button">
+                                    </span>
+                                    <Button 
+                                        variant="fab" 
+                                        className="add-button"
+                                        >
                                         <Icon>add</Icon>
                                     </Button>
                             </Paper>
@@ -604,7 +613,7 @@ class App extends Component {
                         <TextField 
                             className="center-field"
                             autoFocus = {true}
-                            helperText = "Tags"
+                            label = "Search by tags"
                             type = "text"
                             value = {this.state.searchInput}
                             onChange = {ev => this.doImageSearch(ev.target.value.trim())}
