@@ -2,7 +2,7 @@ import React, { Component } from 'react';
 import './App.css';
 
 import ImageEditor from './ImageEditor.js';
-import {TagList, defaultTagOrdering} from './TagList.js';
+import {defaultTagOrdering} from './TagList.js';
 import TifariAPI from "./APIComms.js";
 import {ldebug, assert} from "./Logging.js";
 
@@ -28,6 +28,43 @@ import GridList from '@material-ui/core/GridList';
 import ButtonBase from '@material-ui/core/ButtonBase';
 import Drawer from '@material-ui/core/Drawer';
 import Chip from '@material-ui/core/Chip';
+
+class TagList extends Component{
+
+    render() {
+
+        const tagList = this.props.tags.map(tag => 
+            <Chip 
+                key={tag.id} 
+                label={tag.name}
+                onDelete={() => this.props.onRemove(tag)}
+            />
+        );
+
+        return (
+            <div className={`${this.props.className} tag-list`}>
+                {tagList}
+
+                <span className="input-field">
+                    <TextField
+                        id="tag-input"
+                        label="Add tags"
+                        style={{paddingRight: 8}}
+                        type="text"
+
+                    />
+                </span>
+
+                <Button 
+                    variant="fab" 
+                    className="add-button"
+                    >
+                    <Icon>add</Icon>
+                </Button>
+            </div>
+        );
+    }
+}
 
 class StateMutator {
     constructor(app, oldState) {
@@ -419,7 +456,12 @@ class App extends Component {
     }
 
     unselectImage(image) {
-        this.mutateState(mut => mut.removeImageFromList(IMGS_SELECTED, image));
+        this.mutateState(mut => { 
+            mut.removeImageFromList(IMGS_SELECTED, image)
+            if(mut.getFinalState()[IMGS_SELECTED.prop].length <= 0) {
+                mut.setTabState(0);
+            }
+        });
     }
 
     isImageSelected(image) {
@@ -506,14 +548,6 @@ class App extends Component {
 
             const isSelected = this.isImageSelected(img);
             const drawSelectedMods = isSelected && !this.isViewingSelectedImages();
-            const tagList = img.tags.map(tag => 
-                <Chip 
-                    className="chip"
-                    key={tag.id} 
-                    label={tag.name}
-                    onDelete={() => this.removeTagFrom(img, tag)}
-                />
-            );
 
             return (
                 <Grid item xs={6} key={img.id}>
@@ -542,22 +576,7 @@ class App extends Component {
 
                         <div className="bottom-bar show-when-hovering--on">
                             <Paper square={true} className="paper">
-                                {tagList}
-                                    <span className="input-field">
-                                    <TextField
-                                        id="tag-input"
-                                        label="Add tags"
-                                        style={{paddingRight: 8}}
-                                        type="text"
-
-                                    />
-                                    </span>
-                                    <Button 
-                                        variant="fab" 
-                                        className="add-button"
-                                        >
-                                        <Icon>add</Icon>
-                                    </Button>
+                                <TagList tags={img.tags} onRemove={(tag) => {}}/>
                             </Paper>
                         </div>
                         
@@ -571,15 +590,6 @@ class App extends Component {
         return (
             <React.Fragment>
             <CssBaseline/>
-
-
-                {this.state.displayTagList &&
-                    <TagList 
-                        tags = {this.state.tags}
-                        callbackSetOrdering = {this.foreignSetTagListOrdering}
-                        callbackAddTag = {this.foreignAddTagToSearch}
-                    />
-                }
                 
                 <Paper className="top-bar">
                     
@@ -619,6 +629,14 @@ class App extends Component {
                             onChange = {ev => this.doImageSearch(ev.target.value.trim())}
                         />
                     }
+
+                    { this.state.tabState === 2 &&
+                        <TagList 
+                            className="center-field"
+                            tags={[]} 
+                            onRemove={(tag) => {}}
+                        />
+                    }
                 </Paper>
 
                 <div className="image-list">
@@ -642,7 +660,15 @@ class App extends Component {
     }
 }
 /*
- 
+
+                {this.state.displayTagList &&
+                    <TagList 
+                        tags = {this.state.tags}
+                        callbackSetOrdering = {this.foreignSetTagListOrdering}
+                        callbackAddTag = {this.foreignAddTagToSearch}
+                    />
+                }
+
                 {this.state.selectedImages.length > 0 &&
                     <ImageEditor 
                         images = {this.state.selectedImages}

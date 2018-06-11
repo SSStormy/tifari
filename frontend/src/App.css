@@ -56,21 +56,19 @@
     width: 100%;
     bottom: 0;
     padding: 4px;
+}
 
+.tag-list {
     overflow-x: auto;
     overflow-y: hidden;
     white-space: nowrap;
 }
 
-.image-list .card .bottom-bar .paper .chip {
-    margin-top: 2px;
-}
-
-.image-list .card .bottom-bar .paper .input-field {
+.tag-list .input-field {
     padding-left: 1em;
 }
 
-.image-list .card .bottom-bar .paper .add-button {
+.tag-list .add-button {
     width: 1.5em;
     height: 1em;
 }
