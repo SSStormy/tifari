@@ -51,23 +51,14 @@
     bottom: 0;
 }
 
-.image-list .card .bottom-bar .paper {
-    position: absolute;
-    width: 100%;
-    bottom: 0;
-    padding: 4px;
+.image-list .card .bottom-bar .tag-list {
+    position: relative;
+    padding: 8px;
 }
 
 .image-list .card .checkmark {
     position: absolute;
     top: 50%;
-}
-
-.image-list .card .button-field {
-    position: absolute;
-    bottom: 0;
-    top: 0;
-    right: 0;
 }
 
 .tag-list {
@@ -82,10 +73,13 @@
 }
 
 .tag-list .input-field {
-   padding-left: 1em;
+    padding-left: 1em;
 }
 
 .tag-list .add-button {
     width: 1.5em;
     height: 1em;
+
+    margin-top: auto;
+    margin-bottom: auto;
 }

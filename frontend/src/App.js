@@ -54,8 +54,10 @@ class TagList extends Component {
             />
         );
 
+        const className = this.props.className ? this.props.className : "";
+
         return (
-            <div className={`${this.props.className} tag-list`}>
+            <div className={`${className} tag-list`}>
                 <span className="chip-list">
                     {tagList}
                 </span>
@@ -577,7 +579,7 @@ class App extends Component {
                         }
 
                         <div className="bottom-bar show-when-hovering--on">
-                            <Paper square={true} className="paper">
+                            <Paper square={true}>
                                 <TagList 
                                     tags={img.tags} 
                                     onAdd={(tagString) => this.addTagsTo(img, tagString)}
