@@ -42,6 +42,7 @@ import Select from '@material-ui/core/Select';
 import ListItemSecondaryAction from '@material-ui/core/ListItemSecondaryAction';
 import ListItemAvatar from '@material-ui/core/ListItemAvatar';
 import Avatar from '@material-ui/core/Avatar';
+import ChipInput from 'material-ui-chip-input'
 
 const allOrderings = [
     {
@@ -297,13 +298,23 @@ class StateMutator {
 
         return this;
     }
+    
+    appendArray(arrayName, val) {
+        this.getPropMarkDirty(arrayName).push(val);
+        return this;
+    }
 
-    setSearchTags(query, tagsArray) {
+    removeFromArrayByIdx(arrayName, idx) {
+        let arr = this.getPropMarkDirty(arrayName);
+        arr.splice(idx, 1);
+
+        return this;
+    }
+
+    setSearchTagNames(tagNames) {
         ldebug("Setting search tags");
-        ldebug(query);
-        ldebug(tagsArray);
-        this.newState.searchInput = query;
-        this.newState.searchTagNameSet = new Set(tagsArray);
+        ldebug(tagNames);
+        this.newState.searchTagNames = tagNames;
         return this;
     }
 
@@ -353,8 +364,7 @@ class App extends Component {
             displayTagList: false,
             dialogImageRowsOpen: false,
             tagQueueSize: 0,
-            searchTagNameSet: new Set(),
-            searchInput: "",
+            searchTagNames: [],
             tags: [],
             tagOrdering: allOrderings[0],
             tabState: 0,
@@ -364,6 +374,7 @@ class App extends Component {
         this.foreignShowToBeTaggedTab = this.foreignShowToBeTaggedTab.bind(this);
         this.foreignShowSelectedTab = this.foreignShowSelectedTab.bind(this);
         this.foreignAddTagToSearch = this.foreignAddTagToSearch.bind(this);
+        this.foreignRemoveTagFromSearch= this.foreignRemoveTagFromSearch.bind(this);
     }
 
     componentWillMount() {
@@ -394,15 +405,12 @@ class App extends Component {
     }
 
     // callback that's called when we want to search the backend for tags
-    doImageSearch(query) {
-        let tags = query.trim().split(" ");
-
-        TifariAPI.search(tags)
+    doImageSearch() {
+        ldebug(this.state.searchTagNames);
+        TifariAPI.search(this.state.searchTagNames)
             .then(images =>
-                this.mutateState(mut =>
-                    mut.setSearchTags(query, tags)
-                       .setSearchImages(images)
-                ));
+                this.mutateState(mut => mut.setSearchImages(images))
+            );
     }
 
     foreignShowSearchTab() { 
@@ -432,14 +440,14 @@ class App extends Component {
     }
 
     doTagsMatchSearch(tags) {
-        let searchTags= this.state.searchTagNameSet;
+        let searchTagNames= new Set(this.state.searchTagNames);
         
-        if(searchTags.size <= 0)
+        if(searchTagNames.size <= 0)
             return false;
 
         let imageTags = new Set(tags.map(t => t.name));
     
-        for(let item of searchTags) {
+        for(let item of searchTagNames) {
             if(!imageTags.has(item))
                 return false;
         }
@@ -479,21 +487,22 @@ class App extends Component {
         this.updateToBeTaggedListSize();
     }
 
-    foreignAddTagToSearch(tag) {
+    foreignAddTagToSearch(tagName) {
 
-        if(this.state.searchTagNames.has(tag.name))
+        if(this.state.searchTagNames.includes(tagName))
             return;
 
-        let search = this.refSearchBar.current;
-        search.value = search.value.trim();
+        this.mutateState(mut => { 
+            mut.appendArray("searchTagNames", tagName);
+            this.doImageSearch();
+        });
+    }
 
-        if(0 >= search.value.length) {
-            search.value = search.value.concat(tag.name);
-        } else {
-            search.value = search.value.concat(" ", tag.name);
-        }
-
-        this.doImageSearch(search.value);
+    foreignRemoveTagFromSearch(tagName, idx) {
+        this.mutateState(mut => { 
+            mut.removeFromArrayByIdx("searchTagNames", idx)
+            this.doImageSearch();
+        });
     }
 
     unselectImage(image) {
@@ -688,13 +697,15 @@ class App extends Component {
                     </Tabs>
 
                     { this.state.tabState === TABS_SEARCH &&
-                        <TextField 
+                        <ChipInput
+                            newChipKeyCodes={[13, 32]}
+                            dataSource={this.state.tags.map(t => t.name)}
+                            label = "Search by tags"
                             className="center-field"
                             autoFocus = {true}
-                            label = "Search by tags"
-                            type = "text"
-                            value = {this.state.searchInput}
-                            onChange = {ev => this.doImageSearch(ev.target.value)}
+                            value = {this.state.searchTagNames}
+                            onAdd={this.foreignAddTagToSearch}
+                            onDelete={this.foreignRemoveTagFromSearch}
                         />
                     }
 
@@ -786,6 +797,7 @@ class App extends Component {
                         <ListItemText primary="Clear selection"/>
                     </ListItem>
 
+                    <Divider />
 
                     <ListItem button
                         onClick={() => TifariAPI.reloadRoot().then(
