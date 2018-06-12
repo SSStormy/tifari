@@ -31,6 +31,7 @@ import GridList from '@material-ui/core/GridList';
 import ButtonBase from '@material-ui/core/ButtonBase';
 import Drawer from '@material-ui/core/Drawer';
 import Divider from '@material-ui/core/Divider';
+import Slider from '@material-ui/lab/Slider';
 import Chip from '@material-ui/core/Chip';
 
 class TagList extends Component {
@@ -238,6 +239,11 @@ class StateMutator {
         return this;
     }
 
+    setSliderCardSize(size) {
+        this.newState.sliderCardSize = size;
+        return this;
+    }
+
     setTabState(state) {
         this.newState.tabState = state;
 
@@ -294,6 +300,7 @@ class App extends Component {
             selectedImages: [],
             toBeTaggedImages: [],
 
+            sliderCardSize: 2,
             isDrawerOpen: false,
             displayTagList: false,
             tagQueueSize: 0,
@@ -564,7 +571,7 @@ class App extends Component {
             const drawSelectedMods = isSelected && !this.isViewingSelectedImages();
 
             return (
-                <Grid item xs={6} key={img.id}>
+                <Grid item xs={12 / this.state.sliderCardSize} key={img.id}>
 
                     <Card 
                         square={true} 
@@ -703,6 +710,12 @@ class App extends Component {
                         </ListItemIcon>
 
                         <ListItemText primary="Reload images"/>
+                    </ListItem>
+
+                    <ListItem>
+                        <ListItemText primary="Images per row"/>
+
+                        <Slider value={this.state.sliderCardSize} min={1} max={4} step={1} onChange={(e, v) => this.mutateState(mut => mut.setSliderCardSize(v))}/>
                     </ListItem>
 
                 </Drawer>
