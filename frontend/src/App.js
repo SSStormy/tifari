@@ -800,7 +800,7 @@ class App extends Component {
 
                         <List component="div" dense>
                             <ListItem>
-                                <Select
+                                <Select style={{width: "100%"}}
                                     value={this.state.tagOrdering.id}
                                     onChange={(e) => this.mutateState(mut => mut.setTagOrdering(e.target.value).orderTags())}
                                     inputProps={{
