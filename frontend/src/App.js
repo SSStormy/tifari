@@ -769,7 +769,13 @@ class App extends Component {
                         <ListItemText primary="Tags"/>
                     </ListItem>
 
-                    <Collapse in={this.state.displayTagList} timeout="auto" unmountOnExit>
+                    <Collapse 
+                        in={this.state.displayTagList} 
+                        timeout="auto" 
+                        unmountOnExit 
+                        style={{overflowY: "auto"}}
+                        >
+
                         <List component="div" dense>
                             <ListItem>
                                 <Select
