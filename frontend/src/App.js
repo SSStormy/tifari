@@ -31,8 +31,14 @@ import GridList from '@material-ui/core/GridList';
 import ButtonBase from '@material-ui/core/ButtonBase';
 import Drawer from '@material-ui/core/Drawer';
 import Divider from '@material-ui/core/Divider';
-import Slider from '@material-ui/lab/Slider';
 import Chip from '@material-ui/core/Chip';
+import Dialog from '@material-ui/core/Dialog';
+import DialogActions from '@material-ui/core/DialogActions';
+import DialogContent from '@material-ui/core/DialogContent';
+import DialogContentText from '@material-ui/core/DialogContentText';
+import DialogTitle from '@material-ui/core/DialogTitle';
+import MenuItem from '@material-ui/core/MenuItem';
+import Select from '@material-ui/core/Select';
 
 class TagList extends Component {
 
@@ -244,6 +250,11 @@ class StateMutator {
         return this;
     }
 
+    setDialogImageRowsState(state) {
+        this.newState.dialogImageRowsOpen = state;
+        return this;
+    }
+
     setTabState(state) {
         this.newState.tabState = state;
 
@@ -303,6 +314,7 @@ class App extends Component {
             sliderCardSize: 2,
             isDrawerOpen: false,
             displayTagList: false,
+            dialogImageRowsOpen: false,
             tagQueueSize: 0,
             searchTagNameSet: new Set(),
             searchInput: "",
@@ -316,18 +328,7 @@ class App extends Component {
         this.foreignShowSelectedTab = this.foreignShowSelectedTab.bind(this);
         this.foreignSetTagListOrdering      = this.foreignSetTagListOrdering.bind(this);
         this.foreignToggleTagListDisplay    = this.foreignToggleTagListDisplay.bind(this);
-        this.foreignEscKeyListener          = this.foreignEscKeyListener.bind(this);
         this.foreignAddTagToSearch = this.foreignAddTagToSearch.bind(this);
-    }
-
-    hideEditorSidebar() {
-        this.mutateState(mut => mut.clearSelectedImages());
-    }
-
-    foreignEscKeyListener(ev) {
-        if(ev.key === "Escape") {
-            this.hideEditorSidebar();
-        }
     }
 
     componentWillMount() {
@@ -341,14 +342,6 @@ class App extends Component {
             .then(images =>
                 this.mutateState(mut => mut.setToBeTaggedImages(images))
             );
-    }
-
-    componentDidMount() {
-        document.addEventListener("keypress", this.foreignEscKeyListener, false);
-    }
-
-    componentWillUnmount() {
-        document.removeEventListener("keypress", this.foreignEscKeyListener, false);
     }
 
     mutateState(lambda) {
@@ -560,6 +553,10 @@ class App extends Component {
         }
     }
 
+    setDialogImageRowsState(state) {
+        this.mutateState(mut => mut.setDialogImageRowsState(state));
+    }
+
     render() {
 
         ldebug("Rendering");
@@ -702,6 +699,17 @@ class App extends Component {
                     <Divider />
 
                     <ListItem button
+                        onClick={() => this.mutateState(mut => mut.clearImgList(IMGS_SELECTED))}
+                        >
+                        <ListItemIcon>
+                            <Icon>clear</Icon>
+                        </ListItemIcon>
+
+                        <ListItemText primary="Clear selection"/>
+                    </ListItem>
+
+
+                    <ListItem button
                         onClick={() => TifariAPI.reloadRoot().then(
                             () => this.mutateState(mut => mut.showSnackbar("Reloaded images")))}
                         >
@@ -712,10 +720,14 @@ class App extends Component {
                         <ListItemText primary="Reload images"/>
                     </ListItem>
 
-                    <ListItem>
-                        <ListItemText primary="Images per row"/>
+                    <ListItem button
+                        onClick={() => this.setDialogImageRowsState(true)}
+                        >
+                        <ListItemIcon>
+                            <Icon>view_module</Icon>
+                        </ListItemIcon>
 
-                        <Slider value={this.state.sliderCardSize} min={1} max={4} step={1} onChange={(e, v) => this.mutateState(mut => mut.setSliderCardSize(v))}/>
+                        <ListItemText primary="Adjust images per row"/>
                     </ListItem>
 
                 </Drawer>
@@ -725,6 +737,36 @@ class App extends Component {
                         {imageList}
                     </Grid>
                 </div>
+
+                <Dialog
+                    open={this.state.dialogImageRowsOpen}
+                    onClose={this.foreignSetDialogImageRowsState}
+                    >
+                    <DialogTitle id="form-dialog-title">Adjust image rows</DialogTitle>
+                    <DialogContent>
+
+                        <Select
+                            style={{width: "100%"}}
+                            value={this.state.sliderCardSize}
+                            onChange={(e) => this.mutateState(mut => mut.setSliderCardSize(e.target.value))}
+                            inputProps={{
+                              name: 'rows',
+                            }}
+                            >
+
+                            {[1,2,3,4].map(i => <MenuItem value={i}>{i.toString()}</MenuItem>)}
+
+                          </Select>
+                        
+                    </DialogContent>
+
+                    <DialogActions>
+                        <Button onClick={() => this.setDialogImageRowsState(false)} color="primary">
+                         Close 
+                        </Button>
+                    </DialogActions>
+
+                </Dialog>
 
                 <Snackbar
                     open={this.state.showSnackbar}
