@@ -304,6 +304,16 @@ class StateMutator {
         return this;
     }
 
+    removeFromArray(arrayName, val) {
+        let arr = this.getPropMarkDirty(arrayName);
+        let idx = arr.findIndex(i => i === val);
+        if(idx === -1) return this;
+
+        arr.splice(idx, 1);
+
+        return this;
+    }
+
     removeFromArrayByIdx(arrayName, idx) {
         let arr = this.getPropMarkDirty(arrayName);
         arr.splice(idx, 1);
@@ -375,6 +385,8 @@ class App extends Component {
         this.foreignShowSelectedTab = this.foreignShowSelectedTab.bind(this);
         this.foreignAddTagToSearch = this.foreignAddTagToSearch.bind(this);
         this.foreignRemoveTagFromSearch= this.foreignRemoveTagFromSearch.bind(this);
+        this.foreignAddTagButton = this.foreignAddTagButton.bind(this);
+        this.foreignRemoveTagButton= this.foreignRemoveTagButton.bind(this);
     }
 
     componentWillMount() {
@@ -590,6 +602,18 @@ class App extends Component {
         this.mutateState(mut => mut.setDialogImageRowsState(state));
     }
 
+    foreignAddTagButton(ev) {
+        this.foreignAddTagToSearch(ev.target.value);
+    }
+
+    foreignRemoveTagButton(ev) {
+        let val = ev.target.value;
+        this.mutateState(mut => { 
+            mut.removeFromArray("searchTagNames", val);
+            this.doImageSearch();
+        });
+    }
+
     render() {
 
         ldebug("Rendering");
@@ -759,8 +783,12 @@ class App extends Component {
                                 </Select>
                             </ListItem>
 
-                            {this.state.tags.map(tag => 
-                                <ListItem dense key={tag.id} button>
+                            {this.state.tags.map(tag => {
+                                
+                                const isInSearch = this.state.searchTagNames.includes(tag.name);
+
+                                return (
+                                <ListItem dense key={tag.id}>
                                     
                                 <ListItemAvatar>
                                         <Avatar>{tag.times_used}</Avatar>
@@ -770,18 +798,31 @@ class App extends Component {
 
                                     <ListItemSecondaryAction>
 
-                                        {/* TODO: hook up these buttons*/ }
-                                        <IconButton>
-                                            <Icon>add</Icon>
-                                        </IconButton>
-                                        <IconButton>
-                                            <Icon>remove</Icon>
-                                        </IconButton>
+                                        { !isInSearch 
+                                                ?
 
+                                            <IconButton
+                                                value={tag.name} 
+                                                onClick={this.foreignAddTagButton}
+                                                >
+                                                <Icon>add</Icon>
+                                            </IconButton>
+
+                                                :
+
+                                            <IconButton
+                                                value={tag.name}
+                                                onClick={this.foreignRemoveTagButton}
+                                                >
+                                                <Icon>remove</Icon>
+                                            </IconButton>
+                                        }
+                                        
                                     </ListItemSecondaryAction>
                                     
                                 </ListItem>
-                            )}
+                            );
+                            })}
                         </List>
                     </Collapse>
 
