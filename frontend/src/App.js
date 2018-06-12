@@ -1,7 +1,6 @@
 import React, { Component } from 'react';
 import './App.css';
 
-import ImageEditor from './ImageEditor.js';
 import {defaultTagOrdering} from './TagList.js';
 import TifariAPI from "./APIComms.js";
 import {ldebug, assert} from "./Logging.js";
