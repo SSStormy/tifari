@@ -1,11 +1,12 @@
 import React, { Component } from 'react';
 import './App.css';
 
-import {defaultTagOrdering} from './TagList.js';
 import TifariAPI from "./APIComms.js";
 import {ldebug, assert} from "./Logging.js";
 
+import Collapse from '@material-ui/core/Collapse';
 import ListItem from '@material-ui/core/ListItem';
+import List from '@material-ui/core/List';
 import ListItemIcon from '@material-ui/core/ListItemIcon';
 import ListItemText from '@material-ui/core/ListItemText';
 import CssBaseline from '@material-ui/core/CssBaseline';
@@ -38,6 +39,43 @@ import DialogContentText from '@material-ui/core/DialogContentText';
 import DialogTitle from '@material-ui/core/DialogTitle';
 import MenuItem from '@material-ui/core/MenuItem';
 import Select from '@material-ui/core/Select';
+import ListItemSecondaryAction from '@material-ui/core/ListItemSecondaryAction';
+import ListItemAvatar from '@material-ui/core/ListItemAvatar';
+import Avatar from '@material-ui/core/Avatar';
+
+const allOrderings = [
+    {
+        id: 0,
+        display: "Times used, descending",
+        order: function(tags) {
+            tags.sort((a, b) => a.times_used < b.times_used);
+        }
+    },
+
+    {
+        id: 1,
+        display: "Times used, ascending",
+        order: function(tags) {
+            tags.sort((a, b) => a.times_used > b.times_used);
+        }
+    },
+
+    {
+        id: 2,
+        display: "Alphabetical, descending",
+        order: function(tags) {
+            tags.sort((a, b) => a.name < b.name);
+        }
+    },
+
+    {
+        id: 3,
+        display: "Alphabetical, ascending",
+        order: function(tags) {
+            tags.sort((a, b) => a.name > b.name);
+        }
+    }
+];
 
 class TagList extends Component {
 
@@ -119,8 +157,8 @@ class StateMutator {
         return this;
     }
 
-    setTagOrdering(ordering) {
-        this.newState.tagOrdering = ordering;
+    setTagOrdering(orderingId) {
+        this.newState.tagOrdering = allOrderings[orderingId];
         return this;
     }
 
@@ -318,15 +356,13 @@ class App extends Component {
             searchTagNameSet: new Set(),
             searchInput: "",
             tags: [],
-            tagOrdering: defaultTagOrdering,
+            tagOrdering: allOrderings[0],
             tabState: 0,
         };
 
         this.foreignShowSearchTab = this.foreignShowSearchTab.bind(this);
         this.foreignShowToBeTaggedTab = this.foreignShowToBeTaggedTab.bind(this);
         this.foreignShowSelectedTab = this.foreignShowSelectedTab.bind(this);
-        this.foreignSetTagListOrdering      = this.foreignSetTagListOrdering.bind(this);
-        this.foreignToggleTagListDisplay    = this.foreignToggleTagListDisplay.bind(this);
         this.foreignAddTagToSearch = this.foreignAddTagToSearch.bind(this);
     }
 
@@ -385,13 +421,6 @@ class App extends Component {
         TifariAPI.getTagQueueSize().then(size => this.mutateState(mut => mut.setToBeTaggedListSize(size)));
     }
 
-    foreignSetTagListOrdering(ordering) {
-        this.mutateState(mut => 
-            mut.setTagOrdering(ordering)
-               .orderTags()
-        );
-    }
-
     updateTagList() {
         TifariAPI.getAllTags().then(tags => { 
             tags.sort((a, b) => a.times_used < b.times_used);
@@ -448,10 +477,6 @@ class App extends Component {
 
         this.updateTagList();
         this.updateToBeTaggedListSize();
-    }
-
-    foreignToggleTagListDisplay() {
-        this.mutateState(mut => mut.setTagListDisplayState(!mut.getOldState().displayTagList));
     }
 
     foreignAddTagToSearch(tag) {
@@ -698,6 +723,60 @@ class App extends Component {
                     <Divider />
 
                     <ListItem button
+                        onClick={() => this.mutateState(mut => mut.setTagListDisplayState(!mut.getOldState().displayTagList))}
+                        >
+                        <ListItemIcon>
+                            <Icon>
+                                {this.state.displayTagList ? "expand_less" : "expand_more"}
+                            </Icon>
+                        </ListItemIcon>
+
+                        <ListItemText primary="Tags"/>
+                    </ListItem>
+
+                    <Collapse in={this.state.displayTagList} timeout="auto" unmountOnExit>
+                        <List component="div" dense>
+                            <ListItem>
+                                <Select
+                                    value={this.state.tagOrdering.id}
+                                    onChange={(e) => this.mutateState(mut => mut.setTagOrdering(e.target.value).orderTags())}
+                                    inputProps={{
+                                      name: 'order-by',
+                                    }}
+                                >
+                                    {allOrderings.map(ord => <MenuItem key={ord.id} value={ord.id}>{ord.display}</MenuItem>)}
+                                </Select>
+                            </ListItem>
+
+                            {this.state.tags.map(tag => 
+                                <ListItem dense key={tag.id} button>
+                                    
+                                <ListItemAvatar>
+                                        <Avatar>{tag.times_used}</Avatar>
+                                    </ListItemAvatar>
+
+                                    <ListItemText primary={tag.name}/>
+
+                                    <ListItemSecondaryAction>
+
+                                        {/* TODO: hook up these buttons* }/
+                                        <IconButton>
+                                            <Icon>add</Icon>
+                                        </IconButton>
+                                        <IconButton>
+                                            <Icon>remove</Icon>
+                                        </IconButton>
+
+                                    </ListItemSecondaryAction>
+                                    
+                                </ListItem>
+                            )}
+                        </List>
+                    </Collapse>
+
+                    {this.state.displayTagList && <Divider />}
+
+                    <ListItem button
                         onClick={() => this.mutateState(mut => mut.clearImgList(IMGS_SELECTED))}
                         >
                         <ListItemIcon>
@@ -753,7 +832,7 @@ class App extends Component {
                             }}
                             >
 
-                            {[1,2,3,4].map(i => <MenuItem value={i}>{i.toString()}</MenuItem>)}
+                            {[1,2,3,4].map(i => <MenuItem key={i} value={i}>{i.toString()}</MenuItem>)}
 
                           </Select>
                         
@@ -781,39 +860,5 @@ class App extends Component {
         );
     }
 }
-/*
-
-                {this.state.displayTagList &&
-                    <TagList 
-                        tags = {this.state.tags}
-                        callbackSetOrdering = {this.foreignSetTagListOrdering}
-                        callbackAddTag = {this.foreignAddTagToSearch}
-                    />
-                }
-
-                {this.state.selectedImages.length > 0 &&
-                    <ImageEditor 
-                        images = {this.state.selectedImages}
-                        onAddTag = {this.foreignOnEditorAddTagToSelected}
-                        onRemoveTag = {this.foreignOnEditorRemoveTagFromSelected}
-                        callbackRemoveImageFromSelected = {this.foreignRemoveImageFromSelected}
-                    />
-                }
-
-
-
-
-                </Paper>
-    
-
-
-                         <Button onClick={this. onClick=foreignViewToBeTaggedList}>
-                            To-Tag List({this.state.tagQueueSize})
-                        </Button>
-                        <Button onClick={this.foreignToggleTagListDisplay}>
-                            {this.state.displayTagList ? "Hide" : "Show"} tag list
-                        </Button>
-
- */
 
 export default App;
