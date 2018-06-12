@@ -142,6 +142,11 @@ class StateMutator {
         this.app = app;
     }
 
+    setBackendUrlBuffer(val) {
+        this.newState.backendUrlBuffer = val;
+        return this;
+    }
+
     getFinalState() {
         return this.newState;
     }
@@ -288,6 +293,11 @@ class StateMutator {
         return this;
     }
 
+    setDialogBackendUrlState(state) {
+        this.newState.dialogBackendUrl = state;
+        return this;
+    }
+
     setDialogImageRowsState(state) {
         this.newState.dialogImageRowsOpen = state;
         return this;
@@ -370,14 +380,17 @@ class App extends Component {
             toBeTaggedImages: [],
 
             sliderCardSize: 2,
+            backendUrlBuffer: "",
             isDrawerOpen: false,
             displayTagList: false,
             dialogImageRowsOpen: false,
+            dialogBackendUrl: false,
             tagQueueSize: 0,
             searchTagNames: [],
             tags: [],
             tagOrdering: allOrderings[0],
             tabState: 0,
+            api: new TifariAPI("http://localhost:8001"),
         };
 
         this.foreignShowSearchTab = this.foreignShowSearchTab.bind(this);
@@ -396,7 +409,7 @@ class App extends Component {
     }
 
     updateToBeTaggedList() {
-        TifariAPI.getToBeTaggedList()
+        this.state.api.getToBeTaggedList()
             .then(images =>
                 this.mutateState(mut => mut.setToBeTaggedImages(images))
             );
@@ -419,7 +432,7 @@ class App extends Component {
     // callback that's called when we want to search the backend for tags
     doImageSearch() {
         ldebug(this.state.searchTagNames);
-        TifariAPI.search(this.state.searchTagNames)
+        this.state.api.search(this.state.searchTagNames)
             .then(images =>
                 this.mutateState(mut => mut.setSearchImages(images))
             );
@@ -438,11 +451,11 @@ class App extends Component {
     }
 
     updateToBeTaggedListSize() {
-        TifariAPI.getTagQueueSize().then(size => this.mutateState(mut => mut.setToBeTaggedListSize(size)));
+        this.state.api.getTagQueueSize().then(size => this.mutateState(mut => mut.setToBeTaggedListSize(size)));
     }
 
     updateTagList() {
-        TifariAPI.getAllTags().then(tags => { 
+        this.state.api.getAllTags().then(tags => { 
             tags.sort((a, b) => a.times_used < b.times_used);
             this.mutateState(mut => 
                 mut.setTags(tags)
@@ -472,7 +485,7 @@ class App extends Component {
 
         let imageIds = this.state.selectedImages.map(img => img.id);
 
-        TifariAPI.removeTags([tag.id], imageIds);
+        this.state.api.removeTags([tag.id], imageIds);
 
         this.mutateState(mut => {
 
@@ -489,7 +502,7 @@ class App extends Component {
         let tagNames = tagString.trim().split(" ");
         let imageIds = this.state.selectedImages.map(img => img.id);
 
-        TifariAPI.addTags(tagNames, imageIds)
+        this.state.api.addTags(tagNames, imageIds)
             .then(tags => this.mutateState(mut => 
                 this.localBookkeepTagsAdd(mut, mut.getOldState().selectedImages, tags)
             )
@@ -536,7 +549,7 @@ class App extends Component {
     }
     
     removeTagFrom(image, tag) {
-        TifariAPI.removeTags([tag.id], [image.id]);
+        this.state.api.removeTags([tag.id], [image.id]);
 
         this.mutateState(mut => {
             this.localBookkeepTagRemoval(mut, image, tag);
@@ -550,7 +563,7 @@ class App extends Component {
     addTagsTo(image, tagString) {
         let tagNames = tagString.trim().split(" ");
 
-        TifariAPI.addTags(tagNames, [image.id])
+        this.state.api.addTags(tagNames, [image.id])
             .then(tags => this.mutateState(mut => 
                 this.localBookkeepTagsAdd(mut, [image], tags)
             )
@@ -602,6 +615,13 @@ class App extends Component {
         this.mutateState(mut => mut.setDialogImageRowsState(state));
     }
 
+    setDialogBackendUrlState(state) {
+        this.mutateState(mut => {
+            mut.setBackendUrlBuffer(this.state.api.getEndpoint());
+            mut.setDialogBackendUrlState(state);
+        });
+    }
+
     foreignAddTagButton(ev) {
         this.foreignAddTagToSearch(ev.target.value);
     }
@@ -614,9 +634,11 @@ class App extends Component {
         });
     }
 
-    render() {
+    swapBackendUrl() {
+        this.state.api.setEndpoint(this.state.backendUrlBuffer);
+    }
 
-        ldebug("Rendering");
+    render() {
 
         const activeImageList = this.state[this.state.activeImageListEnum.prop];
         const imageList = activeImageList.map(img => {
@@ -636,7 +658,7 @@ class App extends Component {
 
                         <img style={{opacity: drawSelectedMods ? 0.5 : 1}}
                             id="card-image"
-                            src={TifariAPI.getImageUrl(img)}
+                            src={this.state.api.getImageUrl(img)}
                             title={img.path}
                         />
 
@@ -847,7 +869,7 @@ class App extends Component {
                     <Divider />
 
                     <ListItem button
-                        onClick={() => TifariAPI.reloadRoot().then(
+                        onClick={() => this.state.api.reloadRoot().then(
                             () => this.mutateState(mut => mut.showSnackbar("Reloaded images")))}
                         >
                         <ListItemIcon>
@@ -867,6 +889,18 @@ class App extends Component {
                         <ListItemText primary="Adjust images per row"/>
                     </ListItem>
 
+                    <ListItem button
+                        onClick={() => this.setDialogBackendUrlState(true)}
+                        >
+                        <ListItemIcon>
+                            <Icon>build</Icon>
+                        </ListItemIcon>
+
+                        <ListItemText primary="Set backend URL"/>
+                    </ListItem>
+
+                    {/* TODO: about that links to github, shows version etc*/}
+
                 </Drawer>
 
                 <div className="image-list">
@@ -876,8 +910,41 @@ class App extends Component {
                 </div>
 
                 <Dialog
+                    open={this.state.dialogBackendUrl}
+                    onClose={() => this.setDialogBackendUrlState(false)}
+                    >
+                    <DialogTitle id="form-dialog-title">Set backend URL </DialogTitle>
+                    <DialogContent>
+                        <DialogContentText>
+                            Tifari will use this URL to query searches, images, tags etc.
+                        </DialogContentText>
+
+                        <TextField
+                            autoFocus
+                            fullWidth
+                            margin="dense"
+                            id="url"
+                            label="Backend URL"
+                            type="url"
+                            value = {this.state.backendUrlBuffer}
+                            onChange={(ev) => { let val = ev.target.value; this.mutateState(mut => mut.setBackendUrlBuffer(val))}}
+                        />
+
+                        <DialogActions>
+                            <Button onClick={() => this.setDialogBackendUrlState(false)} color="primary">
+                                Cancel
+                            </Button>
+                            <Button onClick={() => { this.swapBackendUrl(); this.setDialogBackendUrlState(false);}} color="primary">
+                                Set
+                            </Button>
+                        </DialogActions>
+
+                    </DialogContent>
+                </Dialog>
+
+                <Dialog
                     open={this.state.dialogImageRowsOpen}
-                    onClose={this.foreignSetDialogImageRowsState}
+                    onClose={() => this.setDialogImageRowsState(false)}
                     >
                     <DialogTitle id="form-dialog-title">Adjust image rows</DialogTitle>
                     <DialogContent>

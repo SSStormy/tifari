@@ -1,17 +1,30 @@
-const ENDPOINT_API_SEARCH               = "http://localhost:8001/api/search";
-const ENDPOINT_API_TAG_QUEUE            = "http://localhost:8001/api/tag_queue";
-const ENDPOINT_API_ADD_TAGS             = "http://localhost:8001/api/add_tags";
-const ENDPOINT_API_REMOVE_TAGS          = "http://localhost:8001/api/remove_tags";
-const ENDPOINT_API_GET_ALL_TAGS         = "http://localhost:8001/api/get_all_tags";
-const ENDPOINT_API_GET_TAG_QUEUE_SIZE   = "http://localhost:8001/api/tag_queue_size";
-const ENDPOINT_API_RELOAD_ROOT          = "http://localhost:8001/api/reload";
-const ENDPOINT_API_IMAGE                = "http://localhost:8001/";
 
 class TifariAPI {
 
-    static getTagQueueSize() {
+    constructor(endpoint) {
+        this.setEndpoint(endpoint);
+    }
+
+    getEndpoint() {
+        return this.endpoint.url;
+    }
+
+    setEndpoint(endpoint) {
+        this.endpoint = {};
+        this.endpoint.url = endpoint;
+        this.endpoint.search = endpoint + "/api/search";
+        this.endpoint.tagQueue = endpoint + "/api/tag_queue";
+        this.endpoint.addTags = endpoint + "/api/add_tags";
+        this.endpoint.removeTags = endpoint + "/api/remove_tags";
+        this.endpoint.getAllTags= endpoint + "/api/get_all_tags";
+        this.endpoint.getTagQueueSize = endpoint + "/api/tag_queue_size";
+        this.endpoint.reloadRoot = endpoint + "/api/reload";
+        this.endpoint.image= endpoint + "/";
+    }
+
+    getTagQueueSize() {
         try {
-            return fetch(ENDPOINT_API_GET_TAG_QUEUE_SIZE, { method: "GET" })
+            return fetch(this.endpoint.getTagQueueSize, { method: "GET" })
                     .then(results => results.json())
                     .then(payload => payload.tag_queue_size);
         }
@@ -21,9 +34,9 @@ class TifariAPI {
     }
 
 
-    static getAllTags() {
+    getAllTags() {
         try {
-            return fetch(ENDPOINT_API_GET_ALL_TAGS, { method: "GET" })
+            return fetch(this.endpoint.getAllTags, { method: "GET" })
                     .then(results => results.json());
         }
         catch(err) {
@@ -31,18 +44,18 @@ class TifariAPI {
         }
     }
 
-    static reloadRoot() {
+    reloadRoot() {
         try {
-            return fetch(ENDPOINT_API_RELOAD_ROOT, { method: "GET" });
+            return fetch(this.endpoint.reloadRoot, { method: "GET" });
         }
         catch(err) {
             console.error(err);
         }
     }
 
-    static getToBeTaggedList() {
+    getToBeTaggedList() {
         try {
-            return fetch(ENDPOINT_API_TAG_QUEUE, { method: "GET" })
+            return fetch(this.endpoint.tagQueue, { method: "GET" })
                 .then(results => results.json())
         }
         catch(err) {
@@ -50,13 +63,13 @@ class TifariAPI {
         }
 
     }
-    static getImageUrl(img) {
-        return ENDPOINT_API_IMAGE + img.path;
+    getImageUrl(img) {
+        return this.endpoint.image + img.path;
     }
 
-    static search(tags) {
+    search(tags) {
         try {
-            return fetch(ENDPOINT_API_SEARCH, {
+            return fetch(this.endpoint.search, {
                 method: "POST",
 
                 body: JSON.stringify({
@@ -71,9 +84,9 @@ class TifariAPI {
         }
     }
 
-    static addTags(tags, image_ids) {
+    addTags(tags, image_ids) {
         try {
-            return fetch(ENDPOINT_API_ADD_TAGS, {
+            return fetch(this.endpoint.addTags, {
                 method: "POST",
 
                 body: JSON.stringify({
@@ -88,9 +101,9 @@ class TifariAPI {
         }
     }
 
-    static removeTags(tags, imgs) {
+    removeTags(tags, imgs) {
         try {
-            return fetch(ENDPOINT_API_REMOVE_TAGS, {
+            return fetch(this.endpoint.removeTags, {
                 method: "POST",
 
                 body: JSON.stringify({
