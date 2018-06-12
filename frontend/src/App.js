@@ -759,7 +759,7 @@ class App extends Component {
 
                                     <ListItemSecondaryAction>
 
-                                        {/* TODO: hook up these buttons* }/
+                                        {/* TODO: hook up these buttons*/ }
                                         <IconButton>
                                             <Icon>add</Icon>
                                         </IconButton>
