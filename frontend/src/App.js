@@ -6,6 +6,9 @@ import {defaultTagOrdering} from './TagList.js';
 import TifariAPI from "./APIComms.js";
 import {ldebug, assert} from "./Logging.js";
 
+import ListItem from '@material-ui/core/ListItem';
+import ListItemIcon from '@material-ui/core/ListItemIcon';
+import ListItemText from '@material-ui/core/ListItemText';
 import CssBaseline from '@material-ui/core/CssBaseline';
 import IconButton from '@material-ui/core/IconButton';
 import Tabs from '@material-ui/core/Tabs';
@@ -27,6 +30,7 @@ import GridListTile from '@material-ui/core/GridListTile';
 import GridList from '@material-ui/core/GridList';
 import ButtonBase from '@material-ui/core/ButtonBase';
 import Drawer from '@material-ui/core/Drawer';
+import Divider from '@material-ui/core/Divider';
 import Chip from '@material-ui/core/Chip';
 
 class TagList extends Component {
@@ -249,6 +253,11 @@ class StateMutator {
         return this;
     }
 
+    setDrawerOpenState(state) {
+        this.newState.isDrawerOpen = state;
+        return this;
+    }
+
     setTagListDisplayState(state) {
         ldebug("Setting tag list display state to");
         ldebug(state);
@@ -285,6 +294,7 @@ class App extends Component {
             selectedImages: [],
             toBeTaggedImages: [],
 
+            isDrawerOpen: false,
             displayTagList: false,
             tagQueueSize: 0,
             searchTagNameSet: new Set(),
@@ -615,7 +625,14 @@ class App extends Component {
             <CssBaseline/>
                 
                 <Paper className="top-bar">
-                    
+
+                    <IconButton 
+                        className="icon-button"
+                        onClick={() => this.mutateState(mut => mut.setDrawerOpenState(true))}
+                        >
+                        <Icon>menu</Icon>
+                    </IconButton>
+
                     <Tabs className="center-field"
                         value={this.state.tabState} 
                         onChange={(e, v) => this.mutateState(mut => mut.setTabState(v))}
@@ -663,6 +680,33 @@ class App extends Component {
                     }
                 </Paper>
 
+                <Drawer
+                    variant="persistent"
+                    open={this.state.isDrawerOpen}
+                    >
+
+                    <IconButton
+                        onClick={() => this.mutateState(mut => mut.setDrawerOpenState(false))}
+                        >
+
+                        <Icon>chevron_left</Icon>
+                    </IconButton>
+
+                    <Divider />
+
+                    <ListItem button
+                        onClick={() => TifariAPI.reloadRoot().then(
+                            () => this.mutateState(mut => mut.showSnackbar("Reloaded images")))}
+                        >
+                        <ListItemIcon>
+                            <Icon>refresh</Icon>
+                        </ListItemIcon>
+
+                        <ListItemText primary="Reload images"/>
+                    </ListItem>
+
+                </Drawer>
+
                 <div className="image-list">
                     <Grid container spacing={16}>
                         {imageList}
@@ -704,21 +748,6 @@ class App extends Component {
 
 
 
-                    <div className="search-field">
-
-                        <IconButton 
-                            className="bar-icon"
-                            color="inherit"
-                            aria-label="open drawer"
-                            onClick={() => {}}
-                            >
-
-                            <Icon>menu</Icon>
-                        </IconButton>
-
-
-
-                    </div>
 
                 </Paper>
     
@@ -727,13 +756,6 @@ class App extends Component {
                          <Button onClick={this. onClick=foreignViewToBeTaggedList}>
                             To-Tag List({this.state.tagQueueSize})
                         </Button>
-                        <Button 
-                            onClick={() => TifariAPI.reloadRoot().then(
-                                () => this.mutateState(mut => mut.showSnackbar("Reloaded images")))}
-                            >
-                            Reload Images
-                        </Button>
-
                         <Button onClick={this.foreignToggleTagListDisplay}>
                             {this.state.displayTagList ? "Hide" : "Show"} tag list
                         </Button>

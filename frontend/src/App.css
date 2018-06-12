@@ -2,19 +2,15 @@
     margin-bottom: 16px;
 }
 
+.top-bar .icon-button {
+    position: absolute;
+}
+
 .top-bar .center-field {
     margin: auto;
     width: 66%;
     display: flex;
     justify-content: center;
-}
-
-.top-bar .search-field .bar-icon {
-    width: 2em;
-}
-
-.top-bar .search-field .search-field {
-    width: calc(100% - 4em);
 }
 
 .image-list {
