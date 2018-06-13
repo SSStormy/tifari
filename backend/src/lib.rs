@@ -45,17 +45,17 @@ impl TifariDb
 {
     pub fn get_image_from_db(&self, id: i64) -> Result<models::Image>
     {
-        let (id, path, time, tag_array_id): (i64, String, i64, i64) = self.connection.query_row(
-            "SELECT id, path, created_at_time, tags_array_table
+        let (id, path, time): (i64, String, i64) = self.connection.query_row(
+            "SELECT id, path, created_at_time
             FROM images 
             WHERE id=?",
             &[&id],
-            |row| (row.get(0), row.get(1), row.get(2), row.get(3)))?;
+            |row| (row.get(0), row.get(1), row.get(2)))?;
 
         let mut statement = self.connection.prepare(
             &format!("SELECT id, name 
                      FROM tags
-                     WHERE id IN (SELECT tag_id from tags_array_table_{})", tag_array_id))?;
+                     WHERE id IN (SELECT tag_id from tags_array_table_{})", id))?;
 
         let mut tags = HashSet::new();
 
@@ -116,23 +116,16 @@ impl TifariDb
         }
 
         tx.execute_named(
-            "INSERT INTO images (id, path, tags_array_table, created_at_time) 
-            VALUES (null, :path, :tags_array_table, :time)",
+            "INSERT INTO images (id, path, created_at_time) 
+            VALUES (null, :path, :time)",
             &[(":path", path),
-              (":tags_array_table", &rusqlite::types::Null),
-              (":time", &chrono::Utc::now().timestamp())])?;
+              (":time", &chrono::Utc::now().timestamp())
+            ])?;
 
         let image_id = tx.last_insert_rowid();
 
         tx.execute(
-            &format!("CREATE TABLE IF NOT EXISTS tags_array_table_{} (tag_id INTEGER NOT NULL, UNIQUE(tag_id))", image_id), &[])?;
-
-        let tag_table_id = tx.last_insert_rowid();
-
-        tx.execute_named(
-            "UPDATE images SET tags_array_table=:tags_array_table WHERE id=:id",
-            &[(":tags_array_table", &tag_table_id),
-              (":id", &image_id)])?;
+            &format!("CREATE TABLE IF NOT EXISTS tags_array_table_{} (tag_id INTEGER NOT NULL UNIQUE)", image_id), &[])?;
 
         TifariDb::insert_into_tag_queue(&tx, image_id)?;
 
@@ -140,13 +133,12 @@ impl TifariDb
         Ok(image_id)
     }
 
-    fn erase_tag_if_not_used(
-                             tx: &rusqlite::Transaction, 
-                             tag_id: i64, image_ids_array_id: i64) -> Result<()>
+    fn erase_tag_if_not_used(tx: &rusqlite::Transaction, 
+                             tag_id: i64) -> Result<()>
     {
         // query how many elements the image ids array has.
         let num_rows_in_image_ids_table: i64 = tx.query_row(
-            &format!("SELECT COUNT(*) FROM image_ids_array_table_{}", image_ids_array_id),
+            &format!("SELECT COUNT(*) FROM image_ids_array_table_{}", tag_id),
             &[],
             |row| row.get(0))?;
 
@@ -155,7 +147,7 @@ impl TifariDb
         {
             // if not, drop the image_id table and the tag entry from the database
             tx.execute(
-                &format!("DROP TABLE IF EXISTS image_ids_array_table_{}", image_ids_array_id),
+                &format!("DROP TABLE IF EXISTS image_ids_array_table_{}", tag_id),
                 &[])?;
 
             tx.execute(
@@ -182,10 +174,10 @@ impl TifariDb
         let tx = self.connection.transaction()?;
 
         // get image id and it's tag array table id from db
-        let (image_id, tag_array_table_id): (i64, i64) = tx.query_row(
-            "SELECT id, tags_array_table FROM images WHERE path=? LIMIT 1",
+        let image_id: i64 = tx.query_row(
+            "SELECT id FROM images WHERE path=? LIMIT 1",
             &[path],
-            |row| { (row.get(0), row.get(1)) })?;
+            |row| { row.get(0) })?;
 
         // delete the image
         tx.execute(
@@ -197,33 +189,31 @@ impl TifariDb
         // gets all the tag ids and their image id array tables that contain this image id.
         {
             let mut statement = tx.prepare(
-                &format!("SELECT id, image_ids_array_table 
+                &format!("SELECT id 
                          FROM tags 
                          WHERE id IN (
                              SELECT * from tags_array_table_{}
-                         )", tag_array_table_id))?;
+                         )", image_id))?;
 
             // iterates over all the image id array table ids
             for result in statement.query_map(&[], 
-                    |row| (row.get::<i32, i64>(0), 
-                           row.get::<i32, i64>(1)))?
+                    |row| row.get::<i32, i64>(0))?
             {
-                let result = result?;
-                let (tag_id, image_ids_array_table_id) = (result.0, result.1);
+                let tag_id = result?;
 
                 // ...and deletes the image id from them.
                 tx.execute(
-                    &format!("DELETE FROM image_ids_array_table_{} WHERE image_id=?", image_ids_array_table_id),
+                    &format!("DELETE FROM image_ids_array_table_{} WHERE image_id=?", tag_id),
                     &[&image_id])?;
 
                 // ...and erase the tag from the db if it's no longer referenced by and image
-                TifariDb::erase_tag_if_not_used(&tx, tag_id, image_ids_array_table_id)?;
+                TifariDb::erase_tag_if_not_used(&tx, tag_id)?;
             }
         }
 
         // lastly, we drop the image's tag_array_table
         tx.execute(
-            &format!("DROP TABLE IF EXISTS tags_array_table_{}", tag_array_table_id),
+            &format!("DROP TABLE IF EXISTS tags_array_table_{}", image_id),
             &[])?;
 
         tx.commit()?;
@@ -237,15 +227,13 @@ impl TifariDb
             CREATE TABLE IF NOT EXISTS tags (
                     id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
                     name TEXT NOT NULL,
-                    image_ids_array_table INTEGER,
-                    UNIQUE(id, name, image_ids_array_table));
+                    UNIQUE(id, name));
 
             CREATE TABLE IF NOT EXISTS images (
                     id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
                     path TEXT NOT NULL,
-                    tags_array_table INTEGER,
                     created_at_time INTEGER NOT NULL,
-                    UNIQUE(id, path, tags_array_table));
+                    UNIQUE(id, path));
 
             CREATE TABLE IF NOT EXISTS tag_queue (
                     id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
@@ -280,17 +268,12 @@ impl TifariDb
     {
         let tx = self.connection.transaction()?;
 
-        let tags_array_table_id: i64 = tx.query_row(
-            "SELECT tags_array_table FROM images WHERE id=? LIMIT 1",
-            &[&image_id],
-            |row| (row.get(0)))?;
-
-        let (tag_id, image_ids_array_id): (i64, i64) = match tx.query_row(
-                            "SELECT id, image_ids_array_table 
+        let tag_id: i64 = match tx.query_row(
+                            "SELECT id
                             FROM tags 
                             WHERE name=? LIMIT 1", 
                             &[tag],
-                            |row| (row.get(0), row.get(1)))
+                            |row| row.get(0))
         {
             Ok(tuple) => Ok(tuple),
             Err(e) =>
@@ -298,8 +281,8 @@ impl TifariDb
                 if let rusqlite::Error::QueryReturnedNoRows = e
                 {
                     tx.execute(
-                        "INSERT INTO tags (id, name, image_ids_array_table) 
-                        VALUES (null, ?, null)",
+                        "INSERT INTO tags (id, name)
+                        VALUES (null, ?)",
                         &[tag])?;
 
                     let tag_id = tx.last_insert_rowid();
@@ -309,16 +292,7 @@ impl TifariDb
                                  (image_id INTEGER NOT NULL UNIQUE)", tag_id),
                         &[])?;
 
-                    let table_id = tx.last_insert_rowid();
-
-                    tx.execute_named(
-                        "UPDATE tags 
-                        SET image_ids_array_table=:image_ids_array_table_id
-                        WHERE id=:id",
-                        &[(":image_ids_array_table_id", &table_id),
-                          (":id", &tag_id)])?;
-
-                    Ok((tag_id, table_id))
+                    Ok(tag_id)
                 }
                 else { Err(e) }
             }
@@ -328,12 +302,12 @@ impl TifariDb
 
         tx.execute(
             &format!("INSERT INTO image_ids_array_table_{} (image_id)
-                     VALUES (?)", image_ids_array_id),
+                     VALUES (?)", tag_id),
             &[&image_id])?;
 
         tx.execute(
             &format!("INSERT INTO tags_array_table_{} (tag_id)
-                     VALUES (?)", tags_array_table_id),
+                     VALUES (?)", image_id),
             &[&tag_id])?;
 
         tx.commit()?;
@@ -344,33 +318,21 @@ impl TifariDb
     {
         let tx = self.connection.transaction()?;
 
-        // get tag id and image id array from db
-        let image_ids_array_id: i64  = tx.query_row(
-            "SELECT image_ids_array_table FROM tags WHERE id=? LIMIT 1", 
-            &[&tag_id],
-            |row| (row.get(0)))?;
-
-        // get image id and tag id array fcrom db
-        let tags_array_table_id: i64 = tx.query_row(
-            "SELECT tags_array_table FROM images WHERE id=? LIMIT 1",
-            &[&image_id],
-            |row| (row.get(0)))?;
-        
         // remove tag id from image tag array
         tx.execute(
-            &format!("DELETE FROM tags_array_table_{} WHERE tag_id=?", tags_array_table_id),
+            &format!("DELETE FROM tags_array_table_{} WHERE tag_id=?", image_id),
             &[&tag_id])?;
 
         // remove image id from tag image array
         tx.execute(
-            &format!("DELETE FROM image_ids_array_table_{} WHERE image_id=?", image_ids_array_id),
+            &format!("DELETE FROM image_ids_array_table_{} WHERE image_id=?", tag_id),
             &[&image_id])?;
 
-        TifariDb::erase_tag_if_not_used(&tx, tag_id, image_ids_array_id)?;
+        TifariDb::erase_tag_if_not_used(&tx, tag_id)?;
 
         // get the number of tags this image has
         let tag_count: i64 = tx.query_row(
-            &format!("SELECT count(*) FROM tags_array_table_{}", tags_array_table_id),
+            &format!("SELECT count(*) FROM tags_array_table_{}", image_id),
             &[],
             |row| row.get(0))?;
 
@@ -451,21 +413,21 @@ impl TifariDb
         tag_ids_query.push(')');
 
         let mut statement = self.connection.prepare(
-            "SELECT id, tags_array_table 
+            "SELECT id 
             FROM images 
             ORDER BY id DESC")?;
 
         let mut results = vec![];
         let mut skipped = 0;
-        for result in statement.query_map(&[], |row| (row.get(0), row.get(1)))?
+        for result in statement.query_map(&[], |row| row.get(0))?
         {
-            let (image_id, tag_array_id): (i64, i64) = result?;
+            let image_id: i64 = result?;
 
             let count: i64 = self.connection.query_row(
                 &format!("SELECT COUNT(*) 
                          FROM tags_array_table_{}
                          WHERE tag_id IN {}", 
-                         tag_array_id, tag_ids_query),
+                         image_id, tag_ids_query),
                          &[],
                          |row| row.get(0))?;
 
