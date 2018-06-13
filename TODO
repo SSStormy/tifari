@@ -8,15 +8,15 @@ Backend:
       Compare on disk files with in database files, remove the paths that only exist in the db from the db.
       Do this on start.
 
-    ☐ Get rid of image_id_table* and tag_id_table* since we can just use the tag and image ids for those.
+    ✔ Get rid of image_id_table* and tag_id_table* since we can just use the tag and image ids for those. @done(2018-06-13 07:58) @project(Backend)
     ☐ (orderby:random etc)
 
 Frontend:
-    ☐ Tabs
+    ✔ Tabs @done(2018-06-13 07:58) @project(Frontend)
     Image editor
-        ☐ Close button
-        ☐ Copy button
-        ☐ Copy&close button
+        ✘ Close button @cancelled(2018-06-13 07:58) @project(Frontend)
+        ✘ Copy button @cancelled(2018-06-13 07:58) @project(Frontend)
+        ✘ Copy&close button @cancelled(2018-06-13 07:58) @project(Frontend)
         ✔ Give multiple tags in one click @done(2018-06-07 20:33) @project(Frontend)
         ✔ Select many images @done(2018-06-07 20:33) @project(Frontend)
 
