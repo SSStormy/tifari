@@ -244,6 +244,7 @@ class StateMutator {
     }
 
     clearImgList(imgEnum) {
+        this.newState[imgEnum.prop] = {};
         this.newState[imgEnum.prop].arr = [];
         this.newState[imgEnum.prop].page = 0;
         return this;
@@ -308,6 +309,27 @@ class StateMutator {
         if(tagIndex === -1) {
             image.tags.push(tag);
         }
+
+        return this;
+    }
+
+    addAllInCurrentViewToSelection() {
+        let viewType = this.getProp("activeImageListEnum");
+
+        if(viewType.id === IMGS_SELECTED.id)
+            return;
+
+        let sourceImages = this.getPropMarkDirty(viewType.prop).arr;
+        let targetImages = this.getPropMarkDirty(IMGS_SELECTED.prop).arr;
+
+        let existingIds = new Set(targetImages.map(i => i.id));
+
+        sourceImages.forEach(img => {
+            if(existingIds.has(img.id))
+                return;
+
+            targetImages.push(img);
+        });
 
         return this;
     }
@@ -944,6 +966,17 @@ class App extends Component {
                     </Collapse>
 
                     {this.state.displayTagList && <Divider />}
+
+                    <ListItem button
+                        onClick={() => this.mutateState(mut => mut.addAllInCurrentViewToSelection())}
+                        >
+                        <ListItemIcon>
+                            <Icon>select_all</Icon>
+                        </ListItemIcon>
+
+                        <ListItemText primary="Select all"/>
+                    </ListItem>
+
 
                     <ListItem button
                         onClick={() => this.mutateState(mut => mut.clearImgList(IMGS_SELECTED))}
