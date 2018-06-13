@@ -71,7 +71,7 @@ impl Service for Search {
 
 
     fn call(&self, req: Request) -> Self::Future {
-        println!("Received request.");
+        println!("Received request. {}", req.path());
         // TODO: @HACK cloning the config with each request is horrible
         let cfg = self.config.clone();
 

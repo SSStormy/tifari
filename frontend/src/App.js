@@ -171,6 +171,11 @@ class StateMutator {
         return this;
     }
 
+    setApiState(state) {
+        this.newState.apiConnected = state;
+        return this;
+    }
+
     showSnackbar(msg) {
         this.newState.showSnackbar = true;
         this.newState.snackbarMessage = msg;
@@ -218,27 +223,43 @@ class StateMutator {
     }
 
     setSelectedImages(images) {
-        this.newState.selectedImages = images;
+        this.newState.selectedImages = {};
+        this.newState.selectedImages.page = 0;
+        this.newState.selectedImages.arr = images;
         return this;
     }
 
     setSearchImages(images) {
-        this.newState.searchImages= images;
+        this.newState.searchImages= {};
+        this.newState.searchImages.page = 0;
+        this.newState.searchImages.arr = images;
         return this;
     }
 
     setToBeTaggedImages(images) {
-        this.newState.toBeTaggedImages = images;
+        this.newState.toBeTaggedImages= {};
+        this.newState.toBeTaggedImages.page = 0;
+        this.newState.toBeTaggedImages.arr = images;
         return this;
     }
 
     clearImgList(imgEnum) {
-        this.newState[imgEnum.prop] = [];
+        this.newState[imgEnum.prop].arr = [];
+        this.newState[imgEnum.prop].page = 0;
+        return this;
+    }
+
+    setPage(page) {
+        if(1 > page) 
+            page = 1;
+
+        let images = this.getPropMarkDirty(this.getProp("activeImageListEnum").prop);
+        images.page = page;
         return this;
     }
 
     addImageToList(imgsEnum, image) {
-        let images = this.getPropMarkDirty(imgsEnum.prop);
+        let images = this.getPropMarkDirty(imgsEnum.prop).arr;
 
         // avoid duplicate images
         if(images.findIndex(i => i.id === image.id) !== -1)
@@ -251,7 +272,7 @@ class StateMutator {
 
     // doesn't update the image list.
     removeImageFromList(imgsEnum, image) {
-        let images = this.getPropMarkDirty(imgsEnum.prop);
+        let images = this.getPropMarkDirty(imgsEnum.prop).arr;
     
         let imgIndex = images.findIndex(i => i.id === image.id);
         if(imgIndex === -1) return this;
@@ -381,11 +402,19 @@ class App extends Component {
     constructor(props) {
         super(props);
 
+        this.foreignShowSearchTab = this.foreignShowSearchTab.bind(this);
+        this.foreignShowToBeTaggedTab = this.foreignShowToBeTaggedTab.bind(this);
+        this.foreignShowSelectedTab = this.foreignShowSelectedTab.bind(this);
+        this.foreignAddTagToSearch = this.foreignAddTagToSearch.bind(this);
+        this.foreignRemoveTagFromSearch= this.foreignRemoveTagFromSearch.bind(this);
+        this.foreignAddTagButton = this.foreignAddTagButton.bind(this);
+        this.foreignRemoveTagButton= this.foreignRemoveTagButton.bind(this);
+
         this.state = {
             activeImageListEnum: IMGS_SEARCH,
-            searchImages: [],
-            selectedImages: [],
-            toBeTaggedImages: [],
+            searchImages: { page: 0, arr: []},
+            selectedImages: {page: 0, arr: []},
+            toBeTaggedImages: {page: 0, arr: []},
 
             sliderCardSize: 2,
             backendUrlBuffer: "",
@@ -399,22 +428,38 @@ class App extends Component {
             tags: [],
             tagOrdering: allOrderings[0],
             tabState: 0,
-            api: new TifariAPI("http://localhost:8001"),
+            api: new TifariAPI("http://localhost:8001", () => this.apiSuccess(), () => this.apiError()),
+            apiConnected: null,
         };
-
-        this.foreignShowSearchTab = this.foreignShowSearchTab.bind(this);
-        this.foreignShowToBeTaggedTab = this.foreignShowToBeTaggedTab.bind(this);
-        this.foreignShowSelectedTab = this.foreignShowSelectedTab.bind(this);
-        this.foreignAddTagToSearch = this.foreignAddTagToSearch.bind(this);
-        this.foreignRemoveTagFromSearch= this.foreignRemoveTagFromSearch.bind(this);
-        this.foreignAddTagButton = this.foreignAddTagButton.bind(this);
-        this.foreignRemoveTagButton= this.foreignRemoveTagButton.bind(this);
     }
 
     componentWillMount() {
         this.updateToBeTaggedListSize();
+    }
+
+    apiSuccess() {
+        
+        if(this.state.apiConnected !== null && this.state.apiConnected)
+            return;
+
+        this.updateToBeTaggedListSize();
         this.updateTagList();
         this.updateToBeTaggedList();
+
+        this.mutateState(mut => 
+            mut.setApiState(true)
+        );
+    }
+
+    apiError() {
+        if(this.state.apiConnected !== null && !this.state.apiConnected)
+            return;
+
+        console.log("error");
+        this.mutateState(mut => 
+            mut.setApiState(false)
+               .showSnackbar("Failed to connect to backend.")
+        );
     }
 
     updateToBeTaggedList() {
@@ -492,13 +537,13 @@ class App extends Component {
     // callback that's called when we remove a tag from an image
     removeTagFromSelected(tag) {
 
-        let imageIds = this.state.selectedImages.map(img => img.id);
+        let imageIds = this.state.selectedImages.arr.map(img => img.id);
 
         this.state.api.removeTags([tag.id], imageIds);
 
         this.mutateState(mut => {
 
-            mut.getOldState().selectedImages
+            mut.getOldState().selectedImages.arr
                 .forEach(image => this.localBookkeepTagRemoval(mut, image, tag));
         });
 
@@ -509,11 +554,11 @@ class App extends Component {
     // callback that's called whenever we add a tag to an image
     addTagsToSelected(tagString) { 
         let tagNames = tagString.trim().split(" ");
-        let imageIds = this.state.selectedImages.map(img => img.id);
+        let imageIds = this.state.selectedImages.arr.map(img => img.id);
 
         this.state.api.addTags(tagNames, imageIds)
             .then(tags => this.mutateState(mut => 
-                this.localBookkeepTagsAdd(mut, mut.getOldState().selectedImages, tags)
+                this.localBookkeepTagsAdd(mut, mut.getOldState().selectedImages.arr, tags)
             )
         );
 
@@ -542,7 +587,7 @@ class App extends Component {
     unselectImage(image) {
         this.mutateState(mut => { 
             mut.removeImageFromList(IMGS_SELECTED, image)
-            if(mut.getFinalState()[IMGS_SELECTED.prop].length <= 0 
+            if(mut.getFinalState()[IMGS_SELECTED.prop].arr.length <= 0 
                 && mut.getOldState().tabState === TABS_SELECTED) {
                 mut.setTabState(TABS_SEARCH);
             }
@@ -550,7 +595,7 @@ class App extends Component {
     }
 
     isImageSelected(image) {
-        return -1 !== this.state.selectedImages.findIndex(i => i.id === image.id);
+        return -1 !== this.state.selectedImages.arr.findIndex(i => i.id === image.id);
     }
 
     isViewingSelectedImages() {
@@ -652,14 +697,40 @@ class App extends Component {
     }
 
     render() {
+        const min = (a,b) => a > b ? b : a;
 
         const activeImageList = this.state[this.state.activeImageListEnum.prop];
-        const imageList = activeImageList.map(img => {
+        const imgsPerPage = 20;
 
+        const startIdx = activeImageList.page * imgsPerPage; 
+        const endIdx = min(startIdx + imgsPerPage, activeImageList.arr.length);
+        const numPages = activeImageList.arr.length / imgsPerPage;
+
+        let imageList = [];
+
+        let nextPageButtons = [];
+
+        for(let i = 0; i < numPages; i++) {
+            // TODO : make the buttons pretty
+            nextPageButtons.push(
+                <Button 
+                    key={i}
+                    onClick={() => this.mutateState(mut => mut.setPage(i))}
+                    >
+                    {(i + 1).toString()}
+                </Button>
+            );
+        }
+
+        for(let i = startIdx;
+            i < endIdx;
+            i++) {
+
+            const img = activeImageList.arr[i];
             const isSelected = this.isImageSelected(img);
             const drawSelectedMods = isSelected && !this.isViewingSelectedImages();
 
-            return (
+            imageList.push(
                 <Grid item xs={12 / this.state.sliderCardSize} key={img.id}>
 
                     <Card 
@@ -699,13 +770,13 @@ class App extends Component {
 
                 </Grid>
             );
-        });
+        }
 
         let selectedImageTags = [];
         if(this.state.tabState === TABS_SELECTED) {
             let existingTagIds = new Set();
 
-            this.state.selectedImages.forEach(img => {
+            this.state.selectedImages.arr.forEach(img => {
                 img.tags.forEach(tag => {
                     if(existingTagIds.has(tag.id))
                         return;
@@ -746,9 +817,9 @@ class App extends Component {
                         />
                         }
                         
-                        { this.state.selectedImages.length > 0 &&
+                        { this.state.selectedImages.arr.length > 0 &&
                         <Tab 
-                            label={`Selected (${this.state.selectedImages.length})`} 
+                            label={`Selected (${this.state.selectedImages.arr.length})`} 
                             onClick={this.foreignShowSelectedTab}
                         />
                         }
@@ -887,17 +958,6 @@ class App extends Component {
                     <Divider />
 
                     <ListItem button
-                        onClick={() => this.state.api.reloadRoot().then(
-                            () => this.mutateState(mut => mut.showSnackbar("Reloaded images")))}
-                        >
-                        <ListItemIcon>
-                            <Icon>refresh</Icon>
-                        </ListItemIcon>
-
-                        <ListItemText primary="Reload images"/>
-                    </ListItem>
-
-                    <ListItem button
                         onClick={() => this.setDialogImageRowsState(true)}
                         >
                         <ListItemIcon>
@@ -905,6 +965,17 @@ class App extends Component {
                         </ListItemIcon>
 
                         <ListItemText primary="Adjust images per row"/>
+                    </ListItem>
+
+                    <ListItem button
+                        onClick={() => this.state.api.reloadRoot().then(
+                            () => this.mutateState(mut => mut.showSnackbar("Reloaded backend")))}
+                        >
+                        <ListItemIcon>
+                            <Icon>refresh</Icon>
+                        </ListItemIcon>
+
+                        <ListItemText primary="Reload backend"/>
                     </ListItem>
 
                     <ListItem button
@@ -936,6 +1007,12 @@ class App extends Component {
                         {imageList}
                     </Grid>
                 </div>
+
+                {numPages > 0 && 
+                <div>
+                    {nextPageButtons}
+                </div>
+                }
 
                 <Dialog
                     open={this.state.dialogAbout}

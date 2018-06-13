@@ -1,8 +1,13 @@
 
 class TifariAPI {
 
-    constructor(endpoint) {
+    constructor(endpoint, callbackSuccess, callbackErr) {
         this.setEndpoint(endpoint);
+        this.callbackSuccess = callbackSuccess;
+        this.callbackErr = callbackErr;
+
+        this.errHandle = this.errHandle.bind(this);
+        this.onSuccess= this.onSuccess.bind(this);
     }
 
     getEndpoint() {
@@ -22,54 +27,62 @@ class TifariAPI {
         this.endpoint.image= endpoint + "/";
     }
 
-    getTagQueueSize() {
+    errHandle(err) {
+        this.callbackErr();
+    }
+
+    onSuccess(val) {
+        this.callbackSuccess();
+        return val;
+    }
+
+    doRequest(fx) {
         try {
-            return fetch(this.endpoint.getTagQueueSize, { method: "GET" })
-                    .then(results => results.json())
-                    .then(payload => payload.tag_queue_size);
+            let ret = fx();
+            ret.then(this.onSuccess);
+            ret.catch(this.errHandle);
+            return ret;
         }
         catch(err) {
-            console.error(err);
+            this.errHandle(err);
         }
+    }
+
+    getTagQueueSize() {
+        return this.doRequest(() => 
+            fetch(this.endpoint.getTagQueueSize, { method: "GET" })
+                    .then(results => results.json())
+                    .then(payload => payload.tag_queue_size)
+        );
     }
 
 
     getAllTags() {
-        try {
-            return fetch(this.endpoint.getAllTags, { method: "GET" })
-                    .then(results => results.json());
-        }
-        catch(err) {
-            console.error(err);
-        }
+        return this.doRequest(() => 
+            fetch(this.endpoint.getAllTags, { method: "GET" })
+               .then(results => results.json())
+        );
     }
 
     reloadRoot() {
-        try {
-            return fetch(this.endpoint.reloadRoot, { method: "GET" });
-        }
-        catch(err) {
-            console.error(err);
-        }
+        return this.doRequest(() => 
+            fetch(this.endpoint.reloadRoot, { method: "GET" })
+        );
     }
 
     getToBeTaggedList() {
-        try {
-            return fetch(this.endpoint.tagQueue, { method: "GET" })
-                .then(results => results.json())
-        }
-        catch(err) {
-            console.error(err);
-        }
-
+        return this.doRequest(() => 
+            fetch(this.endpoint.tagQueue, { method: "GET" })
+            .then(results => results.json())
+        );
     }
     getImageUrl(img) {
         return this.endpoint.image + img.path;
     }
 
     search(tags) {
-        try {
-            return fetch(this.endpoint.search, {
+        return this.doRequest(() => 
+            fetch(this.endpoint.search, {
                 method: "POST",
 
                 body: JSON.stringify({
@@ -78,15 +91,13 @@ class TifariAPI {
                     max: 20
                 })
             })
-            .then(results => results.json());
-        } catch(err) {
-            console.error(err);
-        }
+            .then(results => results.json())
+        );
     }
 
     addTags(tags, image_ids) {
-        try {
-            return fetch(this.endpoint.addTags, {
+        return this.doRequest(() => 
+            fetch(this.endpoint.addTags, {
                 method: "POST",
 
                 body: JSON.stringify({
@@ -94,16 +105,13 @@ class TifariAPI {
                     image_ids,
                 })
             })
-            .then(results => results.json());
-        }
-        catch(err) {
-            console.error(err);
-        }
+            .then(results => results.json())
+        );
     }
 
     removeTags(tags, imgs) {
-        try {
-            return fetch(this.endpoint.removeTags, {
+        return this.doRequest(() => 
+            fetch(this.endpoint.removeTags, {
                 method: "POST",
 
                 body: JSON.stringify({
@@ -111,11 +119,8 @@ class TifariAPI {
                     image_ids: imgs,
                 })
             })
-            .then(results => results.json());
-        }
-        catch(err) {
-            console.error(err);
-        }
+            .then(results => results.json())
+        );
     }
 }
 
