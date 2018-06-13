@@ -84,12 +84,7 @@ class TifariAPI {
         return this.doRequest(() => 
             fetch(this.endpoint.search, {
                 method: "POST",
-
-                body: JSON.stringify({
-                    tags,
-                    offset: 0,
-                    max: 20
-                })
+                body: JSON.stringify(tags)
             })
             .then(results => results.json())
         );

@@ -366,9 +366,7 @@ impl TifariDb
         Ok(results)
     }
 
-    pub fn search(&self, 
-                  tags: &Vec<String>, 
-                  offset: usize, max_results: usize) -> Result<Vec<models::Image>>
+    pub fn search(&self, tags: &Vec<String>) -> Result<Vec<models::Image>>
     {
         if 0 >= tags.len()
         {
@@ -418,7 +416,6 @@ impl TifariDb
             ORDER BY id DESC")?;
 
         let mut results = vec![];
-        let mut skipped = 0;
         for result in statement.query_map(&[], |row| row.get(0))?
         {
             let image_id: i64 = result?;
@@ -435,18 +432,7 @@ impl TifariDb
 
             if count == num_tags_in_query
             {
-                if skipped >= offset
-                {
-                    results.push(self.get_image_from_db(image_id)?);
-                    if results.len() >= max_results
-                    {
-                        break;
-                    }
-                }
-                else
-                {
-                    skipped += 1;
-                }
+                results.push(self.get_image_from_db(image_id)?);
             }
         }
 
@@ -847,12 +833,12 @@ mod tests {
         assert_ne!(tag1_id, tag2_id);
 
         {
-            let results = db.search(&vec![tag3.clone(), tag2.clone()],0,50).unwrap();
+            let results = db.search(&vec![tag3.clone(), tag2.clone()]).unwrap();
             assert_eq!(results.len(), 0);
         }
 
         {
-            let results = db.search(&vec![tag1.clone(), tag2.clone()],0,50).unwrap();
+            let results = db.search(&vec![tag1.clone(), tag2.clone()]).unwrap();
             assert_eq!(results.len(), 1);
 
             assert_eq!(results[0].get_path(), &img1);
@@ -861,7 +847,7 @@ mod tests {
         }
 
         {
-            let results = db.search(&vec![tag2.clone(), tag1.clone()],0,50).unwrap();
+            let results = db.search(&vec![tag2.clone(), tag1.clone()]).unwrap();
             assert_eq!(results.len(), 1);
 
             assert_eq!(results[0].get_path(), &img1);
@@ -877,14 +863,14 @@ mod tests {
         let tag2_id = db.give_tag(img2_id, &tag2).unwrap();
 
         {
-            let results = db.search(&vec![tag1.clone()], 0, 50).unwrap();
+            let results = db.search(&vec![tag1.clone()]).unwrap();
             assert_eq!(results.len(), 1);
             assert_eq!(results[0].get_path(), &img1);
             assert_eq!(results[0].get_id(), img1_id);
         }
 
         {
-            let results = db.search(&vec![tag2.clone()], 0, 50).unwrap();
+            let results = db.search(&vec![tag2.clone()]).unwrap();
             assert_eq!(results.len(), 1);
             assert_eq!(results[0].get_path(), &img2);
             assert_eq!(results[0].get_id(), img2_id);
@@ -895,7 +881,7 @@ mod tests {
         db.give_tag(img3_id, &tag3).unwrap();
 
         {
-            let results = db.search(&vec![tag2.clone()], 0, 50).unwrap();
+            let results = db.search(&vec![tag2.clone()]).unwrap();
             assert_eq!(results.len(), 2);
 
             assert_eq!(results[0].get_path(), &img2);
@@ -908,7 +894,7 @@ mod tests {
         assert_eq!(db.give_tag(img3_id, &tag1).unwrap(), tag1_id);
 
         {
-            let results = db.search(&vec![tag1.clone()], 0, 50).unwrap();
+            let results = db.search(&vec![tag1.clone()]).unwrap();
             assert_eq!(results.len(), 2);
 
             assert_eq!(results[0].get_path(), &img3);
@@ -916,85 +902,6 @@ mod tests {
 
             assert_eq!(results[1].get_path(), &img1);
             assert_eq!(results[1].get_id(), img1_id);
-        }
-
-        {
-            let tag4 = "tag4".to_string();
-
-            for i in 0..10
-            {
-                let img = format!("test/img_iter{}.png", i);
-                let img_id = db.try_insert_image(&img).unwrap();
-                db.give_tag(img_id, &tag4).unwrap();
-            }
-
-            let after_10 = "special_img10".to_string();
-            let after_10_id = db.try_insert_image(&after_10).unwrap();
-            db.give_tag(after_10_id, &tag4).unwrap();
-
-            for i in 10..15
-            {
-                let img = format!("test/img_iter{}.png", i);
-                let img_id = db.try_insert_image(&img).unwrap();
-                db.give_tag(img_id, &tag4).unwrap();
-            }
-
-            let after_15 = "special_img15".to_string();
-            let after_15_id = db.try_insert_image(&after_15).unwrap();
-            db.give_tag(after_15_id, &tag4).unwrap();
-
-            for i in 15..20
-            {
-                let img = format!("test/img_iter{}.png", i);
-                let img_id = db.try_insert_image(&img).unwrap();
-                db.give_tag(img_id, &tag4).unwrap();
-            }
-
-            {
-                let results = db.search(&vec![tag4.clone()], 2, 10).unwrap();
-                assert_eq!(results.len(), 10);
-
-                assert_ne!(results[0].get_path(), &after_15); // 18
-                assert_ne!(results[0].get_id(), after_15_id); // 18
-
-                assert_ne!(results[1].get_path(), &after_15); // 17
-                assert_ne!(results[1].get_id(), after_15_id); // 17
-
-                assert_ne!(results[2].get_path(), &after_15); // 16
-                assert_ne!(results[2].get_id(), after_15_id); // 16
-
-                assert_eq!(results[3].get_path(), &after_15); // our guy
-                assert_eq!(results[3].get_id(), after_15_id); // our guy
-
-                assert_ne!(results[4].get_path(), &after_15); // 15
-                assert_ne!(results[4].get_id(), after_15_id); // 15
-
-            }
-
-            {
-                let results = db.search(&vec![tag4.clone()], 4, 10).unwrap();
-                assert_eq!(results.len(), 10);
-
-                assert_ne!(results[0].get_path(), &after_15); // 16
-                assert_ne!(results[0].get_id(), after_15_id); // 16
-
-                assert_eq!(results[1].get_path(), &after_15); // our guy
-                assert_eq!(results[1].get_id(), after_15_id); // our guy
-
-                assert_ne!(results[2].get_path(), &after_15); // 15
-                assert_ne!(results[2].get_id(), after_15_id); // 15
-
-
-                assert_ne!(results[6].get_path(), &after_10); // 11
-                assert_ne!(results[6].get_id(), after_10_id); // 11
-
-                assert_eq!(results[7].get_path(), &after_10); 
-                assert_eq!(results[7].get_id(), after_10_id); 
-
-                assert_ne!(results[8].get_path(), &after_10); // 10
-                assert_ne!(results[8].get_id(), after_10_id); // 10
-
-            }
         }
     }
 }

@@ -173,7 +173,7 @@ impl Service for Search {
                 Box::new(FutureResult::from(get_response()))
             },
             (Method::Post, "/api/search") => {
-                Box::new(req_to_json::<models::SearchQuery>(req)
+                Box::new(req_to_json::<Vec<String>>(req)
                     .and_then(move |query| {
                         match backend::TifariDb::new(cfg) {
                             Ok(db) => Ok((query, db)),
@@ -181,7 +181,7 @@ impl Service for Search {
                        }
                     })
                     .and_then(|(query, db)| {
-                         conv_result(db.search(&query.get_tags(), query.get_offset(), query.get_max()))
+                         conv_result(db.search(&query))
                     })
                     .and_then(|images| {
                         conv_result(serde_json::to_string(&images))

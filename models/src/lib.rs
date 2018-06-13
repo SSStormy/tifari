@@ -75,23 +75,6 @@ impl ErrorResponse {
     pub fn get_message(&self) -> &String { &self.message }
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct SearchQuery {
-    tags: Vec<String>,
-    offset: usize,
-    max: usize
-}
-
-impl SearchQuery {
-    pub fn new(tags: Vec<String>, offset: usize, max: usize) -> Self {
-        SearchQuery { tags, offset, max }
-    }
-
-    pub fn get_tags(&self) -> &Vec<String> { &self.tags }
-    pub fn get_offset(&self) -> usize { self.offset }
-    pub fn get_max(&self) -> usize { self.max }
-}
-
 #[derive(Deserialize)]
 pub struct AddTagsRequest {
     tags: Vec<String>,
