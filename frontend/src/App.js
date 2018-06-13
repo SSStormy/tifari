@@ -575,7 +575,9 @@ class App extends Component {
     
     // callback that's called whenever we add a tag to an image
     addTagsToSelected(tagString) { 
-        let tagNames = tagString.trim().split(" ");
+        tagString = tagString.trim();
+        if(tagString.lengt <= 0) return;
+        let tagNames = tagString.split(" ");
         let imageIds = this.state.selectedImages.arr.map(img => img.id);
 
         this.state.api.addTags(tagNames, imageIds)
@@ -637,7 +639,10 @@ class App extends Component {
     }
 
     addTagsTo(image, tagString) {
-        let tagNames = tagString.trim().split(" ");
+        tagString = tagString.trim();
+        if(tagString.length <= 0) return;
+
+        let tagNames = tagString.split(" ");
 
         this.state.api.addTags(tagNames, [image.id])
             .then(tags => this.mutateState(mut => 
