@@ -2,7 +2,7 @@ import React, { Component } from 'react';
 import './App.css';
 
 import TifariAPI from "./APIComms.js";
-import {ldebug, assert} from "./Logging.js";
+import { ldebug } from "./Logging.js";
 
 import Collapse from '@material-ui/core/Collapse';
 import ListItem from '@material-ui/core/ListItem';
@@ -17,18 +17,9 @@ import Icon from '@material-ui/core/Icon';
 import Snackbar from '@material-ui/core/Snackbar';
 import Grid from '@material-ui/core/Grid';
 import Button from '@material-ui/core/Button';
-import AppBar from '@material-ui/core/AppBar';
-import Toolbar from '@material-ui/core/Toolbar';
 import TextField from '@material-ui/core/TextField';
 import Card from '@material-ui/core/Card';
-import CardMedia from '@material-ui/core/CardMedia';
-import CardContent from '@material-ui/core/CardContent';
-import CardActions from '@material-ui/core/CardActions';
-import Typography from '@material-ui/core/Typography';
 import Paper from '@material-ui/core/Paper';
-import GridListTile from '@material-ui/core/GridListTile';
-import GridList from '@material-ui/core/GridList';
-import ButtonBase from '@material-ui/core/ButtonBase';
 import Drawer from '@material-ui/core/Drawer';
 import Divider from '@material-ui/core/Divider';
 import Chip from '@material-ui/core/Chip';
@@ -623,7 +614,7 @@ class App extends Component {
     }
 
     isViewingSelectedImages() {
-        return this.state.activeImageListEnum.id == IMGS_SELECTED.id;
+        return this.state.activeImageListEnum.id === IMGS_SELECTED.id;
     }
     
     removeTagFrom(image, tag) {
@@ -767,7 +758,9 @@ class App extends Component {
                         onClick={(ev) => this.onClickedImageCard(ev, img, isSelected)}
                         >
 
-                        <img style={{opacity: drawSelectedMods ? 0.5 : 1}}
+                        <img 
+                            alt={img.path}
+                            style={{opacity: drawSelectedMods ? 0.5 : 1}}
                             id="card-image"
                             src={this.state.api.getImageUrl(img)}
                             title={img.path}
