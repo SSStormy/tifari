@@ -77,7 +77,7 @@ impl Service for Search {
 
         // TODO : @HACK, we shouldn't have to box task1
         let task1: Box<Future<Item=Self::Response, Error=APIError>> = match (req.method(), req.path()) {
-            (Method::Get, "/api/tag_queue_size") => {
+            (Method::Get, "/api/v1/tag_queue_size") => {
                 let get_response = || {
                     let db = backend::TifariDb::new(cfg.clone())?;
                     let num = db.get_num_elements_in_tag_queue()?;
@@ -87,7 +87,7 @@ impl Service for Search {
 
                 Box::new(FutureResult::from(get_response()))
             }
-            (Method::Post, "/api/remove_tags") => {
+            (Method::Post, "/api/v1/remove_tags") => {
                Box::new(req_to_json::<models::RemoveTagsRequest>(req)
                     .and_then(move |query| {
                         match backend::TifariDb::new(cfg) {
@@ -109,7 +109,7 @@ impl Service for Search {
                     })
                 )
             },
-            (Method::Get, "/api/get_all_tags") => {
+            (Method::Get, "/api/v1/get_all_tags") => {
                 let get_response = || {
                     let db = backend::TifariDb::new(cfg.clone())?;
                     let tags = db.get_all_tags()?;
@@ -120,7 +120,7 @@ impl Service for Search {
 
                 Box::new(FutureResult::from(get_response()))
             },
-            (Method::Post, "/api/add_tags") => {
+            (Method::Post, "/api/v1/add_tags") => {
                 Box::new(req_to_json::<models::AddTagsRequest>(req)
                     .and_then(move |query| {
                         match backend::TifariDb::new(cfg) {
@@ -150,7 +150,7 @@ impl Service for Search {
                 }))
             }
             
-            (Method::Get, "/api/reload") => {
+            (Method::Get, "/api/v1/reload") => {
 
                 let get_response = || {
                     let mut db = backend::TifariDb::new(cfg.clone())?;
@@ -161,7 +161,7 @@ impl Service for Search {
                 Box::new(FutureResult::from(get_response()))
             },
             
-            (Method::Get, "/api/tag_queue") => {
+            (Method::Get, "/api/v1/tag_queue") => {
 
                 let get_response = || {
                     let db = backend::TifariDb::new(cfg.clone())?;
@@ -172,7 +172,7 @@ impl Service for Search {
 
                 Box::new(FutureResult::from(get_response()))
             },
-            (Method::Post, "/api/search") => {
+            (Method::Post, "/api/v1/search") => {
                 Box::new(req_to_json::<Vec<String>>(req)
                     .and_then(move |query| {
                         match backend::TifariDb::new(cfg) {

@@ -17,13 +17,13 @@ class TifariAPI {
     setEndpoint(endpoint) {
         this.endpoint = {};
         this.endpoint.url = endpoint;
-        this.endpoint.search = endpoint + "/api/search";
-        this.endpoint.tagQueue = endpoint + "/api/tag_queue";
-        this.endpoint.addTags = endpoint + "/api/add_tags";
-        this.endpoint.removeTags = endpoint + "/api/remove_tags";
-        this.endpoint.getAllTags= endpoint + "/api/get_all_tags";
-        this.endpoint.getTagQueueSize = endpoint + "/api/tag_queue_size";
-        this.endpoint.reloadRoot = endpoint + "/api/reload";
+        this.endpoint.search = endpoint + "/api/v1/search";
+        this.endpoint.tagQueue = endpoint + "/api/v1/tag_queue";
+        this.endpoint.addTags = endpoint + "/api/v1/add_tags";
+        this.endpoint.removeTags = endpoint + "/api/v1/remove_tags";
+        this.endpoint.getAllTags= endpoint + "/api/v1/get_all_tags";
+        this.endpoint.getTagQueueSize = endpoint + "/api/v1/tag_queue_size";
+        this.endpoint.reloadRoot = endpoint + "/api/v1/reload";
         this.endpoint.image= endpoint + "/";
     }
 
