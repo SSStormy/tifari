@@ -181,7 +181,8 @@ impl Service for Search {
                        }
                     })
                     .and_then(|(query, db)| {
-                         conv_result(db.search(&query))
+                        let query_str: Vec<&str> = query.iter().map(|e| &e[..]).collect();
+                        conv_result(db.search(&query_str))
                     })
                     .and_then(|images| {
                         conv_result(serde_json::to_string(&images))

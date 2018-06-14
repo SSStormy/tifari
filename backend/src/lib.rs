@@ -366,16 +366,16 @@ impl TifariDb
         Ok(results)
     }
 
-    pub fn search(&self, tags: &Vec<String>) -> Result<Vec<models::Image>>
+    fn make_tag_id_list(&self, tags: &Vec<&str>) -> Result<String>
     {
-        if 0 >= tags.len()
+        if tags.len() <= 0
         {
-            return Ok(vec![]);
+            return Ok(String::from("()"));
         }
 
         let mut query = "SELECT id FROM tags WHERE name IN (".to_string();
         let mut params: Vec<&rusqlite::types::ToSql> = Vec::with_capacity(tags.len());
-        
+
         query.push_str(&"?, ".repeat(tags.len() - 1));
         query.push_str("?)");
 
@@ -387,7 +387,6 @@ impl TifariDb
         let mut statement = self.connection.prepare(&query)?;
 
         let mut tag_ids_query = String::from("(");
-        let mut num_tags_in_query = 0;
         let mut skip_first_comma = true;
         for result in statement.query_map(params.as_slice(), |row| row.get(0))?
         {
@@ -400,15 +399,30 @@ impl TifariDb
 
             skip_first_comma = false;
             tag_ids_query.push_str(&result.to_string());
-            num_tags_in_query += 1;
         }
 
-        if num_tags_in_query == 0 || num_tags_in_query != tags.len()
+        tag_ids_query.push(')');
+
+        Ok(tag_ids_query)
+    }
+
+    pub fn search(&self, tags: &Vec<&str>) -> Result<Vec<models::Image>>
+    {
+        if 0 >= tags.len()
         {
             return Ok(vec![]);
         }
 
-        tag_ids_query.push(')');
+        let mut tags_contains = vec![];
+        let mut tags_remove = vec![];
+
+        for tag in tags {
+            if tag.starts_with("-") { tags_remove.push(&tag[1..]); }
+            else { tags_contains.push(*tag); }
+        }
+
+        let tag_ids_query = self.make_tag_id_list(&tags_contains)?;
+        let not_in_tag_ids = self.make_tag_id_list(&tags_remove)?;
 
         let mut statement = self.connection.prepare(
             "SELECT id 
@@ -423,14 +437,15 @@ impl TifariDb
             let count: i64 = self.connection.query_row(
                 &format!("SELECT COUNT(*) 
                          FROM tags_array_table_{}
-                         WHERE tag_id IN {}", 
-                         image_id, tag_ids_query),
+                         WHERE tag_id IN {} 
+                         AND NOT EXISTS(SELECT 1 FROM tags_array_table_{} WHERE tag_id IN {})",
+                         image_id, tag_ids_query, image_id, not_in_tag_ids),
                          &[],
                          |row| row.get(0))?;
 
             let count = count as usize;
 
-            if count == num_tags_in_query
+            if count == tags_contains.len()
             {
                 results.push(self.get_image_from_db(image_id)?);
             }
@@ -815,6 +830,43 @@ mod tests {
     }
 
     #[test]
+    fn db_search_with_removals() {
+        let img1 = "test/img.png".to_string();
+        let img2 = "test/img2.png".to_string();
+
+        let tag1 = "tag1".to_string();
+        let tag2 = "tag2".to_string();
+        let tag3 = "tag3".to_string();
+
+        let no_tag3 = "-tag3".to_string();
+
+        let mut db = TifariDb::new_in_memory().unwrap();
+
+        let img1_id = db.try_insert_image(&img1).unwrap();
+        let img2_id = db.try_insert_image(&img2).unwrap();
+
+        let tag1_id = db.give_tag(img1_id, &tag1).unwrap();
+        let tag2_id = db.give_tag(img1_id, &tag2).unwrap();
+        let tag3_id = db.give_tag(img1_id, &tag3).unwrap();
+
+        assert_eq!(tag1_id, db.give_tag(img2_id, &tag1).unwrap());
+        assert_eq!(tag2_id, db.give_tag(img2_id, &tag2).unwrap());
+
+        {
+            let results = db.search(&vec![&tag1, &tag2]).unwrap();
+            assert_eq!(results.len(), 2);
+        }
+
+        {
+            let results = db.search(&vec![&tag1, &tag2, &no_tag3]).unwrap();
+            assert_eq!(results.len(), 1);
+
+            assert_eq!(results[0].get_path(), &img2);
+            assert_eq!(results[0].get_id(), img2_id);
+        }
+    }
+
+    #[test]
     fn db_search()
     {
         let img1 = "test/img.png".to_string();
@@ -833,12 +885,12 @@ mod tests {
         assert_ne!(tag1_id, tag2_id);
 
         {
-            let results = db.search(&vec![tag3.clone(), tag2.clone()]).unwrap();
+            let results = db.search(&vec![&tag3, &tag2]).unwrap();
             assert_eq!(results.len(), 0);
         }
 
         {
-            let results = db.search(&vec![tag1.clone(), tag2.clone()]).unwrap();
+            let results = db.search(&vec![&tag1, &tag2]).unwrap();
             assert_eq!(results.len(), 1);
 
             assert_eq!(results[0].get_path(), &img1);
@@ -847,7 +899,7 @@ mod tests {
         }
 
         {
-            let results = db.search(&vec![tag2.clone(), tag1.clone()]).unwrap();
+            let results = db.search(&vec![&tag2, &tag1]).unwrap();
             assert_eq!(results.len(), 1);
 
             assert_eq!(results[0].get_path(), &img1);
@@ -863,14 +915,14 @@ mod tests {
         let tag2_id = db.give_tag(img2_id, &tag2).unwrap();
 
         {
-            let results = db.search(&vec![tag1.clone()]).unwrap();
+            let results = db.search(&vec![&tag1]).unwrap();
             assert_eq!(results.len(), 1);
             assert_eq!(results[0].get_path(), &img1);
             assert_eq!(results[0].get_id(), img1_id);
         }
 
         {
-            let results = db.search(&vec![tag2.clone()]).unwrap();
+            let results = db.search(&vec![&tag2]).unwrap();
             assert_eq!(results.len(), 1);
             assert_eq!(results[0].get_path(), &img2);
             assert_eq!(results[0].get_id(), img2_id);
@@ -881,7 +933,7 @@ mod tests {
         db.give_tag(img3_id, &tag3).unwrap();
 
         {
-            let results = db.search(&vec![tag2.clone()]).unwrap();
+            let results = db.search(&vec![&tag2]).unwrap();
             assert_eq!(results.len(), 2);
 
             assert_eq!(results[0].get_path(), &img2);
@@ -894,7 +946,7 @@ mod tests {
         assert_eq!(db.give_tag(img3_id, &tag1).unwrap(), tag1_id);
 
         {
-            let results = db.search(&vec![tag1.clone()]).unwrap();
+            let results = db.search(&vec![&tag1]).unwrap();
             assert_eq!(results.len(), 2);
 
             assert_eq!(results[0].get_path(), &img3);
