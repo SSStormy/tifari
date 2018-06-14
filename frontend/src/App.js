@@ -944,8 +944,8 @@ class App extends Component {
                                 return (
                                 <ListItem dense key={tag.id}>
                                     
-                                <ListItemAvatar>
-                                        <Avatar>{tag.times_used}</Avatar>
+                                    <ListItemAvatar>
+                                        <Avatar style={{width: "32px", height: "32px"}}>{tag.times_used}</Avatar>
                                     </ListItemAvatar>
 
                                     <ListItemText primary={tag.name}/>
