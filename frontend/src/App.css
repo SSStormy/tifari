@@ -13,6 +13,13 @@
     justify-content: center;
 }
 
+.centered { 
+    position: absolute;
+    margin: auto;
+    right: 0;
+    left: 0;
+}
+
 .image-list {
     padding-left: 16px;
     padding-right: 16px;

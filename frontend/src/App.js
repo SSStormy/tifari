@@ -7,6 +7,7 @@ import { ldebug } from "./Logging.js";
 import Collapse from '@material-ui/core/Collapse';
 import ListItem from '@material-ui/core/ListItem';
 import List from '@material-ui/core/List';
+import CircularProgress from '@material-ui/core/CircularProgress';
 import ListItemIcon from '@material-ui/core/ListItemIcon';
 import ListItemText from '@material-ui/core/ListItemText';
 import CssBaseline from '@material-ui/core/CssBaseline';
@@ -400,6 +401,11 @@ class StateMutator {
         this.newState.tagQueueSize = size;
         return this;
     }
+
+    setIsLoadingSearch(state) {
+        this.newState.isLoadingSearch = state;
+        return this;
+    }
 }
 
 const IMGS_SEARCH   = {id: 0, prop: "searchImages" }
@@ -428,6 +434,8 @@ class App extends Component {
             searchImages: { page: 0, arr: []},
             selectedImages: {page: 0, arr: []},
             toBeTaggedImages: {page: 0, arr: []},
+
+            isLoadingSearch: false,
 
             sliderCardSize: 2,
             backendUrlBuffer: "",
@@ -499,10 +507,11 @@ class App extends Component {
     // callback that's called when we want to search the backend for tags
     doImageSearch() {
         ldebug(this.state.searchTagNames);
+        this.mutateState(mut => mut.setIsLoadingSearch(true));
+
         this.state.api.search(this.state.searchTagNames)
-            .then(images =>
-                this.mutateState(mut => mut.setSearchImages(images))
-            );
+            .then(images => this.mutateState(mut => mut.setSearchImages(images)))
+            .finally(() => this.mutateState(mut => mut.setIsLoadingSearch(false)));
     }
 
     foreignShowSearchTab() { 
@@ -594,8 +603,13 @@ class App extends Component {
 
     foreignRemoveTagFromSearch(tagName, idx) {
         this.mutateState(mut => { 
-            mut.removeFromArrayByIdx("searchTagNames", idx)
-            this.doImageSearch();
+            mut.removeFromArrayByIdx("searchTagNames", idx);
+
+            if(mut.newState.searchTagNames.length > 0)
+                this.doImageSearch();
+            else
+                mut.setIsLoadingSearch(false);
+                mut.setSearchImages([]);
         });
     }
 
@@ -757,7 +771,7 @@ class App extends Component {
                         className="card show-when-hovering"
                         onClick={(ev) => this.onClickedImageCard(ev, img, isSelected)}
                         >
-
+                        
                         <img 
                             alt={img.path}
                             style={{opacity: drawSelectedMods ? 0.5 : 1}}
@@ -786,8 +800,6 @@ class App extends Component {
                         </div>
                         
                     </Card>
-
-
                 </Grid>
             );
         }
@@ -1032,12 +1044,17 @@ class App extends Component {
                     </ListItem>
 
                 </Drawer>
+                {this.state.isLoadingSearch 
+                        ? 
+                        <CircularProgress className="centered" size={100}/>
+                        : 
+                        <div className="image-list">
+                            <Grid container spacing={16}>
+                                {imageList}
+                            </Grid>
+                        </div>
+                }
 
-                <div className="image-list">
-                    <Grid container spacing={16}>
-                        {imageList}
-                    </Grid>
-                </div>
 
                 {numPages > 0 && 
                 <div>
