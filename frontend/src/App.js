@@ -17,6 +17,7 @@ import Tab from '@material-ui/core/Tab';
 import Icon from '@material-ui/core/Icon';
 import Snackbar from '@material-ui/core/Snackbar';
 import Grid from '@material-ui/core/Grid';
+import Typography from '@material-ui/core/Typography';
 import Button from '@material-ui/core/Button';
 import TextField from '@material-ui/core/TextField';
 import Card from '@material-ui/core/Card';
@@ -243,8 +244,8 @@ class StateMutator {
     }
 
     setPage(page) {
-        if(1 > page) 
-            page = 1;
+        if(0 > page) 
+            page = 0;
 
         let images = this.getPropMarkDirty(this.getProp("activeImageListEnum").prop);
         images.page = page;
@@ -445,7 +446,7 @@ class App extends Component {
 
             isLoadingSearch: false,
 
-            sliderCardSize: parseInt(getStorageOrDefault("sliderCardSize", 2)),
+            sliderCardSize: parseInt(getStorageOrDefault("sliderCardSize", 2), 10),
             backendUrlBuffer: "",
             isDrawerOpen: false,
             displayTagList: false,
@@ -745,27 +746,12 @@ class App extends Component {
         const imgsPerPage = 20;
 
         const startIdx = activeImageList.page * imgsPerPage; 
-        const endIdx = min(startIdx + imgsPerPage, activeImageList.arr.length);
-        const numPages = activeImageList.arr.length / imgsPerPage;
+        const numPages = Math.ceil(activeImageList.arr.length / imgsPerPage);
 
         let imageList = [];
 
-        let nextPageButtons = [];
-
-        for(let i = 0; i < numPages; i++) {
-            // TODO : make the buttons pretty
-            nextPageButtons.push(
-                <Button 
-                    key={i}
-                    onClick={() => this.mutateState(mut => mut.setPage(i))}
-                    >
-                    {(i + 1).toString()}
-                </Button>
-            );
-        }
-
         for(let i = startIdx;
-            i < endIdx;
+            i < min(startIdx + imgsPerPage, activeImageList.arr.length);
             i++) {
 
             const img = activeImageList.arr[i];
@@ -1056,7 +1042,7 @@ class App extends Component {
                 </Drawer>
                 {this.state.isLoadingSearch 
                         ? 
-                        <CircularProgress className="centered" size={100}/>
+                        <CircularProgress className="loading-scroller" size={100}/>
                         : 
                         <div className="image-list">
                             <Grid container spacing={16}>
@@ -1066,10 +1052,26 @@ class App extends Component {
                 }
 
 
-                {numPages > 0 && 
-                <div>
-                    {nextPageButtons}
-                </div>
+                {numPages > 1 && 
+                        <Paper style={{marginTop: "8px"}} square className="bottom-navbar">
+                        <IconButton 
+                            disabled={activeImageList.page <= 0}
+                            onClick={() => this.mutateState(mut => mut.setPage(activeImageList.page - 1))}
+                            >
+                            <Icon>keyboard_arrow_left</Icon>
+                        </IconButton>
+
+                        <Typography style={{top: 0, bottom: 0, marginBottom: "auto", marginTop: "auto"}}>
+                            {`${activeImageList.page + 1}/${numPages}`}
+                        </Typography>
+
+                        <IconButton
+                            disabled={activeImageList.page + 1>= numPages}
+                            onClick={() => this.mutateState(mut => mut.setPage(activeImageList.page + 1))}
+                            >
+                            <Icon>keyboard_arrow_right</Icon>
+                        </IconButton>
+                    </Paper>
                 }
 
                 <Dialog
