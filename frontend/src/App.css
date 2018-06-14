@@ -66,7 +66,6 @@
 
 .image-list .card .bottom-bar .tag-list {
     position: relative;
-    padding: 8px;
 }
 
 .image-list .card .checkmark {
@@ -75,9 +74,13 @@
 }
 
 .tag-list {
+    padding: 8px;
     overflow-x: auto;
     overflow-y: hidden;
     white-space: nowrap;
+
+    display: flex;
+    align-items: center;
 }
 
 .tag-list .chip-list {
@@ -87,12 +90,4 @@
 
 .tag-list .input-field {
     padding-left: 1em;
-}
-
-.tag-list .add-button {
-    width: 1.5em;
-    height: 1em;
-
-    margin-top: auto;
-    margin-bottom: auto;
 }

@@ -81,12 +81,20 @@ class TagList extends Component {
 
         this.state = {
             textField: "",
+            showLoading: false,
         };
+
+        this.hideLoadingSpinner = this.hideLoadingSpinner.bind(this);
     }
 
     submitTabInput() {
-        this.props.onAdd(this.state.textField);
-        this.setState({textField: ""});
+        const field = this.state.textField;
+        this.setState({showLoading: true, textField: ""});
+        this.props.onAdd(field, this.hideLoadingSpinner);
+    }
+
+    hideLoadingSpinner() {
+        this.setState({showLoading: false});
     }
 
     render() {
@@ -95,7 +103,7 @@ class TagList extends Component {
             <Chip 
                 key={tag.id} 
                 label={tag.name}
-                onDelete={() => this.props.onRemove(tag)}
+                onDelete={() => this.props.onRemove(tag, this.hideLoadingSpinner)}
             />
         );
 
@@ -111,7 +119,6 @@ class TagList extends Component {
                     <TextField
                         value={this.state.textField}
                         id="tag-input"
-                        label="Add tags"
                         style={{paddingRight: 8}}
                         onChange={(e) => this.setState({textField: e.target.value})}
                         type="text"
@@ -119,12 +126,15 @@ class TagList extends Component {
                 </span>
 
                 <Button 
-                    variant="fab" 
+                    variant="outlined" 
+                    color="primary"
                     className="add-button"
                     onClick={() => this.submitTabInput()}
                     >
-                    <Icon>add</Icon>
+                    Add
                 </Button>
+                {this.state.showLoading && <CircularProgress size={42}/>}
+
             </div>
         );
     }
@@ -566,11 +576,12 @@ class App extends Component {
     }
 
     // callback that's called when we remove a tag from an image
-    removeTagFromSelected(tag) {
+    removeTagFromSelected(tag, doneCallback) {
 
         let imageIds = this.state.selectedImages.arr.map(img => img.id);
 
-        this.state.api.removeTags([tag.id], imageIds);
+        this.state.api.removeTags([tag.id], imageIds)
+            .finally(() => doneCallback());
 
         this.mutateState(mut => {
 
@@ -583,7 +594,7 @@ class App extends Component {
     }
     
     // callback that's called whenever we add a tag to an image
-    addTagsToSelected(tagString) { 
+    addTagsToSelected(tagString, doneCallback) { 
         tagString = tagString.trim();
         if(tagString.lengt <= 0) return;
         let tagNames = tagString.split(" ");
@@ -591,9 +602,8 @@ class App extends Component {
 
         this.state.api.addTags(tagNames, imageIds)
             .then(tags => this.mutateState(mut => 
-                this.localBookkeepTagsAdd(mut, mut.getOldState().selectedImages.arr, tags)
-            )
-        );
+                this.localBookkeepTagsAdd(mut, mut.getOldState().selectedImages.arr, tags)))
+            .finally(() => doneCallback());
 
         this.updateTagList();
         this.updateToBeTaggedListSize();
@@ -640,8 +650,9 @@ class App extends Component {
         return this.state.activeImageListEnum.id === IMGS_SELECTED.id;
     }
     
-    removeTagFrom(image, tag) {
-        this.state.api.removeTags([tag.id], [image.id]);
+    removeTagFrom(image, tag, doneCallback) {
+        this.state.api.removeTags([tag.id], [image.id])
+            .finally(() => doneCallback());
 
         this.mutateState(mut => {
             this.localBookkeepTagRemoval(mut, image, tag);
@@ -652,17 +663,15 @@ class App extends Component {
 
     }
 
-    addTagsTo(image, tagString) {
+    addTagsTo(image, tagString, doneCallback) {
         tagString = tagString.trim();
         if(tagString.length <= 0) return;
 
         let tagNames = tagString.split(" ");
 
         this.state.api.addTags(tagNames, [image.id])
-            .then(tags => this.mutateState(mut => 
-                this.localBookkeepTagsAdd(mut, [image], tags)
-            )
-        );
+            .then(tags => this.mutateState(mut => this.localBookkeepTagsAdd(mut, [image], tags)))
+            .finally(() => doneCallback());
 
         this.updateTagList();
         this.updateToBeTaggedListSize();
@@ -789,8 +798,8 @@ class App extends Component {
                             <Paper square={true}>
                                 <TagList 
                                     tags={img.tags} 
-                                    onAdd={(tagString) => this.addTagsTo(img, tagString)}
-                                    onRemove={(tag) => this.removeTagFrom(img, tag)}
+                                    onAdd={(tagString, callback) => this.addTagsTo(img, tagString, callback)}
+                                    onRemove={(tag, callback) => this.removeTagFrom(img, tag, callback)}
                                 />
                             </Paper>
                         </div>
@@ -871,8 +880,8 @@ class App extends Component {
                         <TagList 
                             className="center-field"
                             tags={selectedImageTags}
-                            onAdd={(tagString) => this.addTagsToSelected(tagString)}
-                            onRemove={(tag) => this.removeTagFromSelected(tag)}
+                            onAdd={(tagString, callback) => this.addTagsToSelected(tagString, callback)}
+                            onRemove={(tag, callback) => this.removeTagFromSelected(tag, callback)}
                         />
                     }
                 </Paper>
