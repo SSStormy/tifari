@@ -560,14 +560,36 @@ class App extends Component {
     }
 
     doTagsMatchSearch(tags) {
-        let searchTagNames= new Set(this.state.searchTagNames);
-        
-        if(searchTagNames.size <= 0)
+
+        if(this.state.searchTagNames.length <= 0)
             return false;
 
+        let mustContain = new Set();
+        let cannotContain = new Set();
+
+        this.state.searchTagNames.forEach(name => {
+            if(name.startsWith("-")) {
+                cannotContain.add(name.slice(1));
+            } else {
+                mustContain.add(name);
+            }
+        });
+
+        ldebug("cannot:");
+        ldebug(cannotContain);
+
+        ldebug("must:")
+        ldebug(mustContain);
+
         let imageTags = new Set(tags.map(t => t.name));
+        ldebug(imageTags);
     
-        for(let item of searchTagNames) {
+        for(let item of cannotContain) {
+            if(imageTags.has(item))
+                return false;
+        }
+
+        for(let item of mustContain) {
             if(!imageTags.has(item))
                 return false;
         }
@@ -688,9 +710,11 @@ class App extends Component {
         images.forEach(img => { 
             if(img.tags.length > 0)
                 mut.removeImageFromList(IMGS_TO_TAG, img);
-
+            
             if(this.doTagsMatchSearch(img.tags)) {
                 mut.addImageToList(IMGS_SEARCH, img);
+            } else {
+                mut.removeImageFromList(IMGS_SEARCH, img);
             }
         });
     }
@@ -701,8 +725,12 @@ class App extends Component {
         if(0 >= image.tags.length) {
             mut.addImageToList(IMGS_TO_TAG, image);
             mut.removeImageFromList(IMGS_SEARCH, image);
-        } else if(!this.doTagsMatchSearch(image.tags)) {
-            mut.removeImageFromList(IMGS_SEARCH, image);
+        } else {
+            if(this.doTagsMatchSearch(image.tags)) {
+                mut.addImageToList(IMGS_SEARCH, image);
+            } else {
+                mut.removeImageFromList(IMGS_SEARCH, image);
+            }
         }
     }
 
@@ -796,6 +824,7 @@ class App extends Component {
 
                         <div className="bottom-bar show-when-hovering--on">
                             <Paper square={true}>
+                                {/* TODO: @MEMLEAK*/}
                                 <TagList 
                                     tags={img.tags} 
                                     onAdd={(tagString, callback) => this.addTagsTo(img, tagString, callback)}
