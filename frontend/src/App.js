@@ -328,6 +328,7 @@ class StateMutator {
 
     setSliderCardSize(size) {
         this.newState.sliderCardSize = size;
+        localStorage.setItem("sliderCardSize", size.toString());
         return this;
     }
 
@@ -416,6 +417,12 @@ const TABS_SEARCH = 0;
 const TABS_TO_TAG = 1;
 const TABS_SELECTED = 2;
 
+function getStorageOrDefault(name, def) {
+    const storage = localStorage.getItem(name);
+
+    return storage ? storage : def;
+}
+
 class App extends Component {
 
     constructor(props) {
@@ -429,6 +436,7 @@ class App extends Component {
         this.foreignAddTagButton = this.foreignAddTagButton.bind(this);
         this.foreignRemoveTagButton= this.foreignRemoveTagButton.bind(this);
 
+        const backendUrl = getStorageOrDefault("backendUrl", "http://localhost:8001");
         this.state = {
             activeImageListEnum: IMGS_SEARCH,
             searchImages: { page: 0, arr: []},
@@ -437,7 +445,7 @@ class App extends Component {
 
             isLoadingSearch: false,
 
-            sliderCardSize: 2,
+            sliderCardSize: parseInt(getStorageOrDefault("sliderCardSize", 2)),
             backendUrlBuffer: "",
             isDrawerOpen: false,
             displayTagList: false,
@@ -449,7 +457,7 @@ class App extends Component {
             tags: [],
             tagOrdering: allOrderings[0],
             tabState: 0,
-            api: new TifariAPI("http://localhost:8001", () => this.apiSuccess(), () => this.apiError()),
+            api: new TifariAPI(backendUrl, () => this.apiSuccess(), () => this.apiError()),
             apiConnected: null,
         };
     }
@@ -726,6 +734,8 @@ class App extends Component {
 
     swapBackendUrl() {
         this.state.api.setEndpoint(this.state.backendUrlBuffer);
+        localStorage.setItem("backendUrl", this.state.backendUrlBuffer);
+        this.state.api.reloadRoot();
     }
 
     render() {
