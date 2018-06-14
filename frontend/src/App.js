@@ -618,7 +618,7 @@ class App extends Component {
     // callback that's called whenever we add a tag to an image
     addTagsToSelected(tagString, doneCallback) { 
         tagString = tagString.trim();
-        if(tagString.lengt <= 0) return;
+        if(tagString.length <= 0) return;
         let tagNames = tagString.split(" ");
         let imageIds = this.state.selectedImages.arr.map(img => img.id);
 
