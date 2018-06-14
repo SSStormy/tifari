@@ -68,25 +68,6 @@ impl TifariDb
         Ok(models::Image::new(id, path, time, tags))
     }
 
-
-    pub fn rename_image(&mut self, from: &String, to: &String) -> Result<()>
-    {
-        let tx = self.connection.transaction()?;
-
-        let changed = tx.execute_named(
-            "UPDATE images SET path=:to WHERE path=:from",
-            &[(":from", from),
-              (":to", to)])?;
-
-        if 0 >= changed
-        {
-            return Err(BackendError::NoChangesOccured)
-        }
-
-        tx.commit()?;
-        Ok(())
-    }
-
     fn insert_into_tag_queue(tx: &rusqlite::Transaction, image_id: i64) -> Result<()> {
         tx.execute_named(
             "INSERT INTO tag_queue (id, image_id) VALUES (null, :image_id)",
@@ -95,7 +76,7 @@ impl TifariDb
         Ok(())
     }
 
-    pub fn try_insert_image(&mut self, path: &String) -> Result<i64>
+    pub fn try_insert_image(&mut self, path: &str) -> Result<i64>
     {
         let tx = self.connection.transaction()?;
 
@@ -104,7 +85,7 @@ impl TifariDb
             let mut statement = tx.prepare(
                 "SELECT id FROM images WHERE path=? LIMIT 1")?;
 
-            match statement.exists(&[path]) {
+            match statement.exists(&[&path]) {
                 Ok(val) => Ok(val),
                 Err(e) => Err(BackendError::SQLite(e)),
             }
@@ -118,7 +99,7 @@ impl TifariDb
         tx.execute_named(
             "INSERT INTO images (id, path, created_at_time) 
             VALUES (null, :path, :time)",
-            &[(":path", path),
+            &[(":path", &path),
               (":time", &chrono::Utc::now().timestamp())
             ])?;
 
@@ -169,14 +150,14 @@ impl TifariDb
         Ok(())
     }
 
-    pub fn erase_image(&mut self, path: &String) -> Result<()>
+    pub fn erase_image(&mut self, path: &str) -> Result<()>
     {
         let tx = self.connection.transaction()?;
 
         // get image id and it's tag array table id from db
         let image_id: i64 = tx.query_row(
             "SELECT id FROM images WHERE path=? LIMIT 1",
-            &[path],
+            &[&path],
             |row| { row.get(0) })?;
 
         // delete the image
@@ -264,15 +245,24 @@ impl TifariDb
         Ok(db)
     }
 
-    pub fn give_tag(&mut self, image_id: i64, tag: &String) -> Result<i64>
+    pub fn give_tag(&mut self, image_id: i64, tag: &str) -> Result<i64>
     {
+        if tag.starts_with("-") || 
+            tag.starts_with(" ") ||
+            tag.starts_with("\t") ||
+            tag.starts_with("\r") ||
+            tag.starts_with("\n") ||
+            tag.len() <= 0 {
+            return Err(BackendError::BadTag); 
+        }
+
         let tx = self.connection.transaction()?;
 
         let tag_id: i64 = match tx.query_row(
                             "SELECT id
                             FROM tags 
                             WHERE name=? LIMIT 1", 
-                            &[tag],
+                            &[&tag],
                             |row| row.get(0))
         {
             Ok(tuple) => Ok(tuple),
@@ -283,7 +273,7 @@ impl TifariDb
                     tx.execute(
                         "INSERT INTO tags (id, name)
                         VALUES (null, ?)",
-                        &[tag])?;
+                        &[&tag])?;
 
                     let tag_id = tx.last_insert_rowid();
 
@@ -560,15 +550,15 @@ mod tests {
     fn db_image_insertion()
     {
         let mut db = TifariDb::new_in_memory().unwrap();
-        db.try_insert_image(&"test/img.png".to_string()).unwrap();
-        assert!(db.try_insert_image(&"test/img.png".to_string()) .is_err());
+        db.try_insert_image(&"test/img.png").unwrap();
+        assert!(db.try_insert_image(&"test/img.png") .is_err());
     }
 
     #[test]
     fn db_image_erase()
     {
         let mut db = TifariDb::new_in_memory().unwrap();
-        let img = "test/img.png".to_string();
+        let img = "test/img.png";
 
         assert!(db.erase_image(&img).is_err());
 
@@ -577,30 +567,13 @@ mod tests {
     }
 
     #[test]
-    fn db_image_rename()
-    {
-        let mut db = TifariDb::new_in_memory().unwrap();
-        let from = "test/img.png".to_string();
-        let to = "test/img2.png".to_string();
-
-        assert!(db.rename_image(&from, &to).is_err());
-
-        db.try_insert_image(&from).unwrap();
-        db.rename_image(&from, &to).unwrap();
-
-        assert!(db.erase_image(&from).is_err());
-
-        db.erase_image(&to).unwrap();
-    }
-
-    #[test]
     fn db_image_tag()
     {
         let mut db = TifariDb::new_in_memory().unwrap();
-        let img = "test/img.png".to_string();
+        let img = "test/img.png";
 
-        let tag1 = "tag_1".to_string();
-        let tag2 = "tag_2".to_string();
+        let tag1 = "tag_1";
+        let tag2 = "tag_2";
 
         assert!(db.give_tag(1, &tag1).is_err());
         assert!(db.remove_tag(1, 1).is_err());
@@ -626,13 +599,13 @@ mod tests {
     fn db_consistent_tag_ids() {
         let mut db = TifariDb::new_in_memory().unwrap();
 
-        let img1 = String::from("img1");
-        let img2 = String::from("img2");
-        let img3 = String::from("img3");
-        let img4 = String::from("img4");
+        let img1 = "img1";
+        let img2 = "img2";
+        let img3 = "img3";
+        let img4 = "img4";
 
-        let tag1 = String::from("tag1");
-        let tag2 = String::from("tag2");
+        let tag1 = "tag1";
+        let tag2 = "tag2";
 
         let img1_id = db.try_insert_image(&img1).unwrap();
         let img2_id = db.try_insert_image(&img2).unwrap();
@@ -664,9 +637,9 @@ mod tests {
     fn db_duplicate_tags()
     {
         let mut db = TifariDb::new_in_memory().unwrap();
-        let img = "test/img.png".to_string();
+        let img = "test/img.png";
 
-        let tag1 = "tag_1".to_string();
+        let tag1 = "tag_1";
 
         let img_id = db.try_insert_image(&img).unwrap();
         db.give_tag(img_id, &tag1).unwrap();
@@ -680,10 +653,10 @@ mod tests {
     fn db_tag_queue_element_counter() {
         let mut db = TifariDb::new_in_memory().unwrap();
 
-        let img1 = "test/img1.png".to_string();
-        let img2 = "test/img2.png".to_string();
+        let img1 = "test/img1.png";
+        let img2 = "test/img2.png";
 
-        let tag1 = "tag_1".to_string();
+        let tag1 = "tag_1";
 
         assert_eq!(db.get_num_elements_in_tag_queue().unwrap(), 0);
 
@@ -716,10 +689,10 @@ mod tests {
     fn db_tag_queue_gets_filled_when_tags_are_removed_from_images() {
         let mut db = TifariDb::new_in_memory().unwrap();
 
-        let img1 = "test/img1.png".to_string();
-        let img2 = "test/img2.png".to_string();
+        let img1 = "test/img1.png";
+        let img2 = "test/img2.png";
 
-        let tag1 = "tag_1".to_string();
+        let tag1 = "tag_1";
 
         let img1_id = db.try_insert_image(&img1).unwrap();
         let img2_id = db.try_insert_image(&img2).unwrap();
@@ -788,10 +761,10 @@ mod tests {
     fn db_tag_queue() 
     {
         let mut db = TifariDb::new_in_memory().unwrap();
-        let img1 = "test/img1.png".to_string();
-        let img2 = "test/img2.png".to_string();
+        let img1 = "test/img1.png";
+        let img2 = "test/img2.png";
 
-        let tag1 = "tag_1".to_string();
+        let tag1 = "tag_1";
 
         assert_eq!(db.get_tag_queue().unwrap().len(), 0);
 
@@ -831,14 +804,14 @@ mod tests {
 
     #[test]
     fn db_search_with_removals() {
-        let img1 = "test/img.png".to_string();
-        let img2 = "test/img2.png".to_string();
+        let img1 = "test/img.png";
+        let img2 = "test/img2.png";
 
-        let tag1 = "tag1".to_string();
-        let tag2 = "tag2".to_string();
-        let tag3 = "tag3".to_string();
+        let tag1 = "tag1";
+        let tag2 = "tag2";
+        let tag3 = "tag3";
 
-        let no_tag3 = "-tag3".to_string();
+        let no_tag3 = "-tag3";
 
         let mut db = TifariDb::new_in_memory().unwrap();
 
@@ -867,15 +840,28 @@ mod tests {
     }
 
     #[test]
-    fn db_search()
-    {
-        let img1 = "test/img.png".to_string();
-        let img2 = "test/img2.png".to_string();
-        let img3 = "test/img3.png".to_string();
+    fn db_disallow_some_tags() {
+        let mut db = TifariDb::new_in_memory().unwrap();
+        let img = db.try_insert_image("image").unwrap();
 
-        let tag1 = "tag1".to_string();
-        let tag2 = "tag2".to_string();
-        let tag3 = "tag3".to_string();
+        assert!(db.give_tag(img, &"").is_err());
+        assert!(db.give_tag(img, &"-").is_err());
+        assert!(db.give_tag(img, &"-asdf").is_err());
+        assert!(db.give_tag(img, &" -asdf").is_err());
+        assert!(db.give_tag(img, &"\n").is_err());
+        assert!(db.give_tag(img, &"\r").is_err());
+        assert!(db.give_tag(img, &"\t").is_err());
+    }
+
+    #[test]
+    fn db_search() {
+        let img1 = "test/img.png";
+        let img2 = "test/img2.png";
+        let img3 = "test/img3.png";
+
+        let tag1 = "tag1";
+        let tag2 = "tag2";
+        let tag3 = "tag3";
 
         let mut db = TifariDb::new_in_memory().unwrap();
 

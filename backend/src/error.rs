@@ -12,6 +12,7 @@ pub enum BackendError
     Notify(notify::Error),
     ImageExists,
     NoChangesOccured,
+    BadTag,
 }
 
 impl From<std::io::Error> for BackendError 
