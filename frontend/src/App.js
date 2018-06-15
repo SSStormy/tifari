@@ -218,6 +218,19 @@ class StateMutator {
         return this.newState[name];
     }
 
+    shuffleSelectedImages() {
+        let imgs = this.getPropMarkDirty(IMGS_SELECTED.prop).arr;
+
+        for(let idx = imgs.length-1; idx >= 1; idx--) {
+            let swapIdx = Math.round(Math.random() * idx);
+
+            let temp = imgs[swapIdx]
+            imgs[swapIdx] = imgs[idx];
+            imgs[idx] = temp;
+        }
+        return this;
+    }
+
     setActiveImageList(imgsEnum) {
         ldebug("Setting active image list to");
         ldebug(imgsEnum);
@@ -250,6 +263,8 @@ class StateMutator {
         this.newState[imgEnum.prop] = {};
         this.newState[imgEnum.prop].arr = [];
         this.newState[imgEnum.prop].page = 0;
+
+        this.newState.tabState = TABS_SEARCH;
         return this;
     }
 
@@ -1019,6 +1034,16 @@ class App extends Component {
                         </ListItemIcon>
 
                         <ListItemText primary="Select all"/>
+                    </ListItem>
+
+                    <ListItem button
+                        onClick={() => this.mutateState(mut => mut.shuffleSelectedImages())}
+                        >
+                        <ListItemIcon>
+                            <Icon>shuffle</Icon>
+                        </ListItemIcon>
+
+                        <ListItemText primary="Shuffle selection"/>
                     </ListItem>
 
 
