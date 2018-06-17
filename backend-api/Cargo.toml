@@ -15,3 +15,11 @@ futures = "0.1.21"
 serde_json = "1"
 serde_derive = "1"
 serde = "1"
+
+[lib]
+name = "tifari_backend_api"
+path = "src/lib.rs"
+
+[[bin]]
+name = "backend_api"
+path = "src/main.rs"

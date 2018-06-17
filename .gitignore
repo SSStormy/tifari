@@ -5,3 +5,6 @@ target/
 node_modules/
 config.json
 *.db
+frontend/build/
+prod/static/
+

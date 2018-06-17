@@ -1,0 +1,7 @@
+[package]
+name = "prod"
+version = "0.1.0"
+authors = ["Justas Dabrila <justasdabrila@gmail.com>"]
+
+[dependencies]
+backend-api = { path = "../backend-api", version = "*" }
