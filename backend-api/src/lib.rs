@@ -152,7 +152,30 @@ impl Service for Search {
                         ok(get_resp_with_payload(payload))
                 }))
             }
-            
+            (Method::Get, "/api/v1/config") => {
+                let cfg = match std::fs::read_to_string("config.json") {
+                    Ok(c) => ok(get_resp_with_payload(c)),
+                    Err(e) => err(APIError::from(e))
+                };
+
+                Box::new(cfg)
+            },
+            (Method::Post, "/api/v1/config") => {
+                let res = req_to_json::<backend::TifariConfig>(req)
+                     .and_then(move |cfg| {
+                         // reserialize to string so that we're sure the cfg is
+                         // correct
+                        conv_result(serde_json::to_vec(&cfg))
+                     })
+                     .and_then(move |data| {
+                        conv_result(std::fs::write("config.json", &data))
+                     })
+                     .and_then(|()| {
+                         ok(get_default_success_response())
+                     });
+
+                Box::new(res)
+            },
             (Method::Get, "/api/v1/reload") => {
 
                 let get_response = || {
