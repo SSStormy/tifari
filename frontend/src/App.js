@@ -4,7 +4,10 @@ import './App.css';
 import TifariAPI from "./APIComms.js";
 import { ldebug } from "./Logging.js";
 
+import FormControlLabel from '@material-ui/core/FormControlLabel';
+import Checkbox from '@material-ui/core/Checkbox';
 import Collapse from '@material-ui/core/Collapse';
+import Switch from '@material-ui/core/Switch';
 import ListItem from '@material-ui/core/ListItem';
 import List from '@material-ui/core/List';
 import CircularProgress from '@material-ui/core/CircularProgress';
@@ -166,6 +169,7 @@ class StateMutator {
         ldebug(tags);
 
         this.newState.tags = tags;
+
         return this;
     }
 
@@ -358,6 +362,16 @@ class StateMutator {
         return this;
     }
 
+    setDialogShowTagList(state, target) {
+        this.newState.dialogShowTagList = state;
+        this.newState.tagListTarget = new Set();
+
+        if(target)
+            target.forEach(t => this.newState.tagListTarget.add(t.id));
+
+        return this;
+    }
+
     setDialogEditConfigState(state) {
         this.newState.dialogEditConfigOpen= state;
         return this;
@@ -484,12 +498,14 @@ class App extends Component {
 
             isLoadingSearch: false,
 
+            tagListTarget: new Set(),
             sliderCardSize: parseInt(getStorageOrDefault("sliderCardSize", 2), 10),
             backendUrlBuffer: "",
             isDrawerOpen: false,
             displayTagList: false,
             dialogImageRowsOpen: false,
             dialogAbout: false,
+            dialogShowTagList: false,
             dialogBackendUrl: false,
             tagQueueSize: 0,
             searchTagNames: [],
@@ -771,6 +787,10 @@ class App extends Component {
         }
     }
 
+    setDialogShowTagList(state, target) {
+        this.mutateState(mut => mut.setDialogShowTagList(state, target));
+    }
+
     setDialogImageRowsState(state) {
         this.mutateState(mut => mut.setDialogImageRowsState(state));
     }
@@ -888,6 +908,8 @@ class App extends Component {
 
                         <div className="bottom-bar show-when-hovering--on">
                             <Paper square={true}>
+                                <Button onClick={() => this.setDialogShowTagList(true, img.tags)}>Show tag list</Button>
+
                                 {/* TODO: @MEMLEAK*/}
                                 <TagList 
                                     tags={img.tags} 
@@ -1337,6 +1359,40 @@ class App extends Component {
                     </DialogActions>
 
                 </Dialog>
+
+
+                <Dialog
+                    open={this.state.dialogShowTagList}
+                    onClose={() => this.setDialogShowTagList(false, null)}
+                    >
+                    <DialogTitle id="form-dialog-title">Edit config</DialogTitle>
+
+                    <DialogContent>
+                        {this.state.tags.map(tag => 
+                            <FormControlLabel
+                                key={tag.id}
+                                control={
+                                    <Checkbox
+                                        checked={this.state.tagListTarget.has(tag.id)}
+                                        onChange={() => {}}
+                                        value={tag.name}
+                                        color="primary"
+                                    />
+                                }
+                                label={tag.name}
+                            />
+                        )
+                        }
+                    </DialogContent>
+
+                    <DialogActions>
+                        <Button onClick={() => this.setDialogShowTagList(false, null)} color="primary">
+                            Close
+                        </Button>
+                    </DialogActions>
+
+                </Dialog>
+
 
 
 
