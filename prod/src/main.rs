@@ -16,7 +16,7 @@ fn main() {
             Ok(service)
         }).unwrap();
 
-        println!("Serving API");
+        println!("Serving API at 8001");
         server.run().unwrap();
 
     });
@@ -31,7 +31,7 @@ fn main() {
         Ok(staticfile)
     }).unwrap();
 
-    println!("Serving static frontend");
+    println!("Serving static frontend at 3001");
     server.run().unwrap();
     api_thread.join().unwrap();
 }

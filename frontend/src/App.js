@@ -358,6 +358,16 @@ class StateMutator {
         return this;
     }
 
+    setDialogEditConfigState(state) {
+        this.newState.dialogEditConfigOpen= state;
+        return this;
+    }
+
+    setLocalConfig(cfg) {
+        this.newState.localConfig = cfg;
+        return this;
+    }
+
     setDialogBackendUrlState(state) {
         this.newState.dialogBackendUrl = state;
         return this;
@@ -455,6 +465,8 @@ class App extends Component {
         super(props);
 
         this.foreignShowSearchTab = this.foreignShowSearchTab.bind(this);
+        this.foreignDialogEditConfigUpdateDbRoot = this.foreignDialogEditConfigUpdateDbRoot.bind(this);
+        this.foreignDialogEditConfigUpdateImageRoot = this.foreignDialogEditConfigUpdateImageRoot.bind(this);
         this.foreignShowToBeTaggedTab = this.foreignShowToBeTaggedTab.bind(this);
         this.foreignShowSelectedTab = this.foreignShowSelectedTab.bind(this);
         this.foreignAddTagToSearch = this.foreignAddTagToSearch.bind(this);
@@ -468,6 +480,7 @@ class App extends Component {
             searchImages: { page: 0, arr: []},
             selectedImages: {page: 0, arr: []},
             toBeTaggedImages: {page: 0, arr: []},
+            localConfig: {},
 
             isLoadingSearch: false,
 
@@ -769,6 +782,19 @@ class App extends Component {
         });
     }
 
+    setDialogEditConfigState(state) {
+        if(state) {
+            this.state.api.getConfig().then(cfg => {
+                this.mutateState(mut => { 
+                    mut.setLocalConfig(cfg);
+                    mut.setDialogEditConfigState(state);
+                });
+            })
+        } else {
+            this.mutateState(mut => mut.setDialogEditConfigState(state));
+        }
+    }
+
     foreignAddTagButton(ev) {
         this.foreignAddTagToSearch(ev.target.value);
     }
@@ -789,6 +815,29 @@ class App extends Component {
         this.state.api.setEndpoint(this.state.backendUrlBuffer);
         localStorage.setItem("backendUrl", this.state.backendUrlBuffer);
         this.state.api.reloadRoot();
+    }
+
+    dialogEditConfigSubmit() {
+        this.state.api.setConfig(this.state.localConfig);
+        this.setDialogEditConfigState(false);
+    }
+
+    foreignDialogEditConfigUpdateDbRoot(e) {
+        let val = e.target.value;
+        this.mutateState(mut => {
+            let cfg = mut.getOldState().localConfig;
+            cfg.db_root = val;
+            mut.setLocalConfig(cfg);
+        });
+    }
+
+    foreignDialogEditConfigUpdateImageRoot(e) {
+        let val = e.target.value;
+        this.mutateState(mut => {
+            let cfg = mut.getOldState().localConfig;
+            cfg.image_root = val;
+            mut.setLocalConfig(cfg);
+        });
     }
 
     render() {
@@ -1069,6 +1118,8 @@ class App extends Component {
                         <ListItemText primary="Adjust images per row"/>
                     </ListItem>
 
+                    <Divider />
+
                     <ListItem button
                         onClick={() => this.state.api.reloadRoot().then(
                             () => this.mutateState(mut => mut.showSnackbar("Reloaded backend")))}
@@ -1079,6 +1130,18 @@ class App extends Component {
 
                         <ListItemText primary="Reload backend"/>
                     </ListItem>
+
+                    <ListItem button
+                        onClick={() => this.setDialogEditConfigState(true)}
+                        >
+                        <ListItemIcon>
+                            <Icon>details</Icon>
+                        </ListItemIcon>
+
+                        <ListItemText primary="Edit backend config"/>
+                    </ListItem>
+
+
 
                     <ListItem button
                         onClick={() => this.setDialogBackendUrlState(true)}
@@ -1237,6 +1300,45 @@ class App extends Component {
                     </DialogActions>
 
                 </Dialog>
+
+                <Dialog
+                    open={this.state.dialogEditConfigOpen}
+                    onClose={() => this.setDialogEditConfigState(false)}
+                    >
+                    <DialogTitle id="form-dialog-title">Edit config</DialogTitle>
+                    <DialogContent>
+                        <TextField
+                            value={this.state.localConfig.db_root}
+                            id="db_root"
+                            label="Database root"
+                            type="text"
+                            onChange={this.foreignDialogEditConfigUpdateDbRoot}
+                        />
+
+                        <TextField
+                            value={this.state.localConfig.image_root}
+                            id="image_root"
+                            label="Image root"
+                            type="text"
+                            onChange={this.foreignDialogEditConfigUpdateImageRoot}
+                        />
+                    </DialogContent>
+
+                    <DialogActions>
+
+
+                        <Button onClick={() => this.setDialogEditConfigState(false)} color="primary">
+                         Close 
+                     </Button>
+                        <Button onClick={() => this.dialogEditConfigSubmit()} color="primary">
+                         Submit 
+                        </Button>
+
+                    </DialogActions>
+
+                </Dialog>
+
+
 
                 <Snackbar
                     open={this.state.showSnackbar}

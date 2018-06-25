@@ -24,6 +24,7 @@ class TifariAPI {
         this.endpoint.getAllTags= endpoint + "/api/v1/get_all_tags";
         this.endpoint.getTagQueueSize = endpoint + "/api/v1/tag_queue_size";
         this.endpoint.reloadRoot = endpoint + "/api/v1/reload";
+        this.endpoint.config= endpoint + "/api/v1/config";
         this.endpoint.image= endpoint + "/";
     }
 
@@ -46,6 +47,23 @@ class TifariAPI {
         catch(err) {
             this.errHandle(err);
         }
+    }
+
+    getConfig() {
+        return this.doRequest(() => 
+            fetch(this.endpoint.config, { method: "GET" })
+                    .then(results => results.json())
+        );
+    }
+
+    setConfig(cfg) {
+        return this.doRequest(() => 
+            fetch(this.endpoint.config, { 
+                method: "POST",
+                body: JSON.stringify(cfg),
+            })
+            .then(results => results.json())
+        );
     }
 
     getTagQueueSize() {
