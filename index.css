@@ -1,0 +1,58 @@
+.html, body {
+    font-family: "Open Sans", sans-serif;
+    font-size: 100%;
+    background: #FAFAFA;
+    margin: 0;
+}
+
+.header {
+    color: #fafafa;
+    
+    background:url("header.png") no-repeat 0px 0px;
+    background-size: cover;
+}
+
+.header .container {
+    padding-top: 2%;
+    padding-bottom: 7%;
+}
+
+.content {
+    padding-top: 30%;
+    padding-bottom: 40%;
+}
+
+.left {
+    float: left;
+    width: 50%;
+}
+
+.left .img-wrap {
+    height: 100%;
+    position: relative;
+
+    /* Center contents */
+    display: flex;
+    justify-content: center;
+
+}
+
+.left .img-wrap img {
+    height: 100%;
+}
+
+.right {
+    float: right;
+    width: 50%;
+}
+
+.center {
+    position: relative;
+    margin: auto;
+    width: 50%;
+}
+
+.center-internal {
+    display: flex;
+    justify-content: center;
+}

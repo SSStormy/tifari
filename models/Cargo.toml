@@ -1,8 +1,0 @@
-[package]
-name = "models"
-version = "0.1.0"
-authors = ["Justas Dabrila <justasdabrila@gmail.com>"]
-
-[dependencies]
-serde_derive = "1"
-serde = "1"
