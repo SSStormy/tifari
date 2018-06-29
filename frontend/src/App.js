@@ -91,54 +91,87 @@ class TagList extends Component {
     }
 
     submitTabInput() {
-        const field = this.state.textField;
+        let field = this.state.textField;
+        if(field.length <= 0) return;
+        field = field.trim();
+        let names = field.split(" ");
+
         this.setState({showLoading: true, textField: ""});
-        this.props.onAdd(field, this.hideLoadingSpinner);
+        this.props.onAdd(names, this.hideLoadingSpinner);
     }
 
     hideLoadingSpinner() {
         this.setState({showLoading: false});
     }
 
+    onCheckmark(e, tag) {
+        this.setState({showLoading: true, textField: ""});
+
+        if(e.target.checked)
+            this.props.onAdd([tag.name], this.hideLoadingSpinner);
+        else
+            this.props.onRemove(tag, this.hideLoadingSpinner);
+    }
+
     render() {
 
-        const tagList = this.props.tags.map(tag => 
-            <Chip 
-                key={tag.id} 
-                label={tag.name}
-                onDelete={() => this.props.onRemove(tag, this.hideLoadingSpinner)}
-            />
-        );
-
-        const className = this.props.className ? this.props.className : "";
-
         return (
-            <div className={`${className} tag-list`}>
-                <span className="chip-list">
-                    {tagList}
-                </span>
+            <Dialog
+                open={this.props.open}
+                onClose={this.props.onClose}
+                >
+                <DialogTitle id="form-dialog-title">Edit tags</DialogTitle>
 
-                <span className="input-field">
+                <DialogContent>
+
                     <TextField
                         value={this.state.textField}
                         id="tag-input"
-                        style={{paddingRight: 8}}
+                        label="New tag"
+                        style={{width: "80%", paddingRight: 8}}
                         onChange={(e) => this.setState({textField: e.target.value})}
                         type="text"
                     />
-                </span>
 
-                <Button 
-                    variant="outlined" 
-                    color="primary"
-                    className="add-button"
-                    onClick={() => this.submitTabInput()}
-                    >
-                    Add
-                </Button>
+                    <Button 
+                        variant="outlined" 
+                        color="primary"
+                        style={{width: "18%"}}
+                        className="add-button"
+                        onClick={() => this.submitTabInput()}
+                        >
+                        Add
+                    </Button>
+
+
                 {this.state.showLoading && <CircularProgress size={42}/>}
 
-            </div>
+                    <Grid container>
+                        {this.props.tags.map(tag =>
+                            <Grid item xs={4} key={tag.id}>
+                            <FormControlLabel
+                                control={
+                                    <Checkbox
+                                        checked={this.props.tagListTarget.has(tag.id)}
+                                        onChange={(e) => this.onCheckmark(e, tag)}
+                                        value={tag.name}
+                                        color="primary"
+                                    />
+                                }
+                                label={tag.name}
+                            />
+                        </Grid>
+                        )}
+                    </Grid>
+                </DialogContent>
+
+                <DialogActions>
+                    <Button onClick={this.props.onClose} color="primary">
+                        Close
+                    </Button>
+                </DialogActions>
+
+            </Dialog>
         );
     }
 }
@@ -362,9 +395,10 @@ class StateMutator {
         return this;
     }
 
-    setDialogShowTagList(state, target) {
+    setDialogShowTagList(state, target, images) {
         this.newState.dialogShowTagList = state;
         this.newState.tagListTarget = new Set();
+        this.newState.tagListImages = images;
 
         if(target)
             target.forEach(t => this.newState.tagListTarget.add(t.id));
@@ -499,6 +533,7 @@ class App extends Component {
             isLoadingSearch: false,
 
             tagListTarget: new Set(),
+            tagListImages: [],
             sliderCardSize: parseInt(getStorageOrDefault("sliderCardSize", 2), 10),
             backendUrlBuffer: "",
             isDrawerOpen: false,
@@ -542,7 +577,7 @@ class App extends Component {
         console.log("error");
         this.mutateState(mut => 
             mut.setApiState(false)
-               .showSnackbar("Failed to connect to backend.")
+               .showSnackbar("Backend error.")
         );
     }
 
@@ -642,17 +677,16 @@ class App extends Component {
     }
 
     // callback that's called when we remove a tag from an image
-    removeTagFromSelected(tag, doneCallback) {
-
-        let imageIds = this.state.selectedImages.arr.map(img => img.id);
+    removeTagFromImages(images, tag, doneCallback) {
+        let imageIds = images.map(img => img.id);
 
         this.state.api.removeTags([tag.id], imageIds)
             .finally(() => doneCallback());
 
         this.mutateState(mut => {
-
-            mut.getOldState().selectedImages.arr
-                .forEach(image => this.localBookkeepTagRemoval(mut, image, tag));
+            images.forEach(image => { 
+                this.localBookkeepTagRemoval(mut, image, tag);
+            });
         });
 
         this.updateTagList();
@@ -660,15 +694,15 @@ class App extends Component {
     }
     
     // callback that's called whenever we add a tag to an image
-    addTagsToSelected(tagString, doneCallback) { 
-        tagString = tagString.trim();
-        if(tagString.length <= 0) return;
-        let tagNames = tagString.split(" ");
-        let imageIds = this.state.selectedImages.arr.map(img => img.id);
+    addTagsToImages(images, tagNames, doneCallback) { 
+        let imageIds = images.map(img => img.id);
 
         this.state.api.addTags(tagNames, imageIds)
-            .then(tags => this.mutateState(mut => 
-                this.localBookkeepTagsAdd(mut, mut.getOldState().selectedImages.arr, tags)))
+            .then(tags => { 
+                this.mutateState(mut => {
+                    this.localBookkeepTagsAdd(mut, images, tags);
+                });
+            })
             .finally(() => doneCallback());
 
         this.updateTagList();
@@ -716,40 +750,17 @@ class App extends Component {
         return this.state.activeImageListEnum.id === IMGS_SELECTED.id;
     }
     
-    removeTagFrom(image, tag, doneCallback) {
-        this.state.api.removeTags([tag.id], [image.id])
-            .finally(() => doneCallback());
-
-        this.mutateState(mut => {
-            this.localBookkeepTagRemoval(mut, image, tag);
-        });
-
-        this.updateTagList();
-        this.updateToBeTaggedListSize();
-
-    }
-
-    addTagsTo(image, tagString, doneCallback) {
-        tagString = tagString.trim();
-        if(tagString.length <= 0) return;
-
-        let tagNames = tagString.split(" ");
-
-        this.state.api.addTags(tagNames, [image.id])
-            .then(tags => this.mutateState(mut => this.localBookkeepTagsAdd(mut, [image], tags)))
-            .finally(() => doneCallback());
-
-        this.updateTagList();
-        this.updateToBeTaggedListSize();
-
-    }
-
     localBookkeepTagsAdd(mut, images, tags) {
 
         // add each tag to each image
-        tags.forEach(tag => images.forEach(
-                img => mut.addTagToImage(img, tag))
-        );
+        tags.forEach(tag => { 
+            images.forEach(img => {
+                mut.addTagToImage(img, tag);
+            });
+
+            mut.getPropMarkDirty("tagListTarget").add(tag.id);
+        });
+
 
         images.forEach(img => { 
             if(img.tags.length > 0)
@@ -765,6 +776,7 @@ class App extends Component {
 
     localBookkeepTagRemoval(mut, image, tag) {
         mut.removeTagFromImage(image, tag);
+        mut.getPropMarkDirty("tagListTarget").delete(tag.id);
 
         if(0 >= image.tags.length) {
             mut.addImageToList(IMGS_TO_TAG, image);
@@ -787,8 +799,8 @@ class App extends Component {
         }
     }
 
-    setDialogShowTagList(state, target) {
-        this.mutateState(mut => mut.setDialogShowTagList(state, target));
+    setDialogShowTagList(state, target, images) {
+        this.mutateState(mut => mut.setDialogShowTagList(state, target, images));
     }
 
     setDialogImageRowsState(state) {
@@ -908,14 +920,7 @@ class App extends Component {
 
                         <div className="bottom-bar show-when-hovering--on">
                             <Paper square={true}>
-                                <Button onClick={() => this.setDialogShowTagList(true, img.tags)}>Show tag list</Button>
-
-                                {/* TODO: @MEMLEAK*/}
-                                <TagList 
-                                    tags={img.tags} 
-                                    onAdd={(tagString, callback) => this.addTagsTo(img, tagString, callback)}
-                                    onRemove={(tag, callback) => this.removeTagFrom(img, tag, callback)}
-                                />
+                                <Button onClick={() => this.setDialogShowTagList(true, img.tags, [img])}>Show tag list</Button>
                             </Paper>
                         </div>
                         
@@ -924,7 +929,7 @@ class App extends Component {
             );
         }
 
-        let selectedImageTags = [];
+        let selectedImageTags = new Set();
         if(this.state.tabState === TABS_SELECTED) {
             let existingTagIds = new Set();
 
@@ -934,7 +939,7 @@ class App extends Component {
                         return;
 
                     existingTagIds.add(tag.id);
-                    selectedImageTags.push(tag);
+                    selectedImageTags.add(tag);
                 })
             })
         }
@@ -992,12 +997,8 @@ class App extends Component {
                     }
 
                     { this.state.tabState === TABS_SELECTED &&
-                        <TagList 
-                            className="center-field"
-                            tags={selectedImageTags}
-                            onAdd={(tagString, callback) => this.addTagsToSelected(tagString, callback)}
-                            onRemove={(tag, callback) => this.removeTagFromSelected(tag, callback)}
-                        />
+
+                        <Button onClick={() => this.setDialogShowTagList(true, selectedImageTags, this.state.selectedImages.arr)}>Show tag list</Button>
                     }
                 </Paper>
 
@@ -1360,41 +1361,17 @@ class App extends Component {
 
                 </Dialog>
 
-
-                <Dialog
+                <TagList 
                     open={this.state.dialogShowTagList}
                     onClose={() => this.setDialogShowTagList(false, null)}
-                    >
-                    <DialogTitle id="form-dialog-title">Edit config</DialogTitle>
-
-                    <DialogContent>
-                        {this.state.tags.map(tag => 
-                            <FormControlLabel
-                                key={tag.id}
-                                control={
-                                    <Checkbox
-                                        checked={this.state.tagListTarget.has(tag.id)}
-                                        onChange={() => {}}
-                                        value={tag.name}
-                                        color="primary"
-                                    />
-                                }
-                                label={tag.name}
-                            />
-                        )
-                        }
-                    </DialogContent>
-
-                    <DialogActions>
-                        <Button onClick={() => this.setDialogShowTagList(false, null)} color="primary">
-                            Close
-                        </Button>
-                    </DialogActions>
-
-                </Dialog>
-
-
-
+                    className="center-field"
+                    tags={this.state.tags}
+                    tagListTarget={this.state.tagListTarget}
+                    onAdd={(names, callback) =>  {
+                        this.addTagsToImages(this.state.tagListImages, names, callback)
+                    }}
+                    onRemove={(tag, callback) => this.removeTagFromImages(this.state.tagListImages, tag, callback)}
+                />
 
                 <Snackbar
                     open={this.state.showSnackbar}
