@@ -46,6 +46,14 @@ const VERSION = "1.0.0";
 const allOrderings = [
     {
         id: 0,
+        display: "By ID",
+        order: function(tags) {
+            tags.sort((a, b) => a.id > b.id);
+        }
+    },
+
+    {
+        id: 1,
         display: "Times used, descending",
         order: function(tags) {
             tags.sort((a, b) => a.times_used < b.times_used);
@@ -53,7 +61,7 @@ const allOrderings = [
     },
 
     {
-        id: 1,
+        id: 2,
         display: "Times used, ascending",
         order: function(tags) {
             tags.sort((a, b) => a.times_used > b.times_used);
@@ -61,7 +69,7 @@ const allOrderings = [
     },
 
     {
-        id: 2,
+        id: 3,
         display: "Alphabetical, descending",
         order: function(tags) {
             tags.sort((a, b) => a.name < b.name);
@@ -69,12 +77,12 @@ const allOrderings = [
     },
 
     {
-        id: 3,
+        id: 4,
         display: "Alphabetical, ascending",
         order: function(tags) {
             tags.sort((a, b) => a.name > b.name);
         }
-    }
+    },
 ];
 
 class TagList extends Component {
@@ -120,7 +128,12 @@ class TagList extends Component {
                 open={this.props.open}
                 onClose={this.props.onClose}
                 >
-                <DialogTitle id="form-dialog-title">Edit tags</DialogTitle>
+                <DialogTitle id="form-dialog-title">
+                    Edit tags
+                    <span style={{float: "right"}}>
+                        {this.state.showLoading && <CircularProgress/>}
+                    </span>
+                </DialogTitle>
 
                 <DialogContent>
 
@@ -142,9 +155,6 @@ class TagList extends Component {
                         >
                         Add
                     </Button>
-
-
-                {this.state.showLoading && <CircularProgress size={42}/>}
 
                     <Grid container>
                         {this.props.tags.map(tag =>
@@ -208,6 +218,7 @@ class StateMutator {
 
     setTagOrdering(orderingId) {
         this.newState.tagOrdering = allOrderings[orderingId];
+        localStorage.setItem("tagOrdering", orderingId.toString());
         return this;
     }
 
@@ -521,6 +532,7 @@ class App extends Component {
         this.foreignRemoveTagFromSearch= this.foreignRemoveTagFromSearch.bind(this);
         this.foreignAddTagButton = this.foreignAddTagButton.bind(this);
         this.foreignRemoveTagButton= this.foreignRemoveTagButton.bind(this);
+        this.foreignReload = this.foreignReload.bind(this);
 
         const backendUrl = getStorageOrDefault("backendUrl", "http://localhost:8001");
         this.state = {
@@ -542,10 +554,11 @@ class App extends Component {
             dialogAbout: false,
             dialogShowTagList: false,
             dialogBackendUrl: false,
+            dialogEditConfigOpen: false,
             tagQueueSize: 0,
             searchTagNames: [],
             tags: [],
-            tagOrdering: allOrderings[0],
+            tagOrdering: allOrderings[parseInt(getStorageOrDefault("tagOrdering", 0), 10)],
             tabState: 0,
             api: new TifariAPI(backendUrl, () => this.apiSuccess(), () => this.apiError()),
             apiConnected: null,
@@ -581,8 +594,16 @@ class App extends Component {
         );
     }
 
+    foreignReload() {
+        this.updateToBeTaggedList()
+            .then(() => {
+                this.state.api.reloadRoot()
+                    .then(() => this.mutateState(mut => mut.showSnackbar("Reloaded backend")));
+            });
+    }
+
     updateToBeTaggedList() {
-        this.state.api.getToBeTaggedList()
+        return this.state.api.getToBeTaggedList()
             .then(images =>
                 this.mutateState(mut => mut.setToBeTaggedImages(images))
             );
@@ -1144,9 +1165,9 @@ class App extends Component {
                     <Divider />
 
                     <ListItem button
-                        onClick={() => this.state.api.reloadRoot().then(
-                            () => this.mutateState(mut => mut.showSnackbar("Reloaded backend")))}
-                        >
+                        onClick={this.foreignReload}
+                    >
+
                         <ListItemIcon>
                             <Icon>refresh</Icon>
                         </ListItemIcon>
