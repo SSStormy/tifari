@@ -80,6 +80,12 @@ impl APINewService {
     }
 }
 
+pub enum ConfigStatus {
+    Valid = 0,
+    InvalidImageFolder = 1,
+    ImageFolderIsNotAFolder = 2,
+}
+
 impl Service for Search {
     type Request = Request;
     type Response = Response;
@@ -96,6 +102,24 @@ impl Service for Search {
         // TODO : @HACK, we shouldn't have to box task1
         let cfg = self.config.clone();
         let task1: Box<Future<Item=Self::Response, Error=APIError>> = match (req.method(), req.path()) {
+            (Method::Get, "/api/v1/config_status") => {
+
+                let get_status = || {
+                    let metadata = match std::fs::metadata(cfg.read().unwrap().get_root()) {
+                        Ok(v) => v,
+                        Err(_) => return ConfigStatus::InvalidImageFolder,
+                    };
+
+                    if !metadata.is_dir() { return ConfigStatus::ImageFolderIsNotAFolder }
+
+                    ConfigStatus::Valid
+                };
+
+                let payload = format!("{{\"state\": {}}}", get_status() as i32);
+
+                Box::new(ok(get_resp_with_payload(payload)))
+            },
+
             (Method::Get, "/api/v1/tag_queue_size") => {
                 let get_response = || {
                     let db = backend::TifariDb::new(cfg)?;
@@ -105,7 +129,7 @@ impl Service for Search {
                 };
 
                 Box::new(FutureResult::from(get_response()))
-            }
+            },
             (Method::Post, "/api/v1/remove_tags") => {
                Box::new(req_to_json::<models::RemoveTagsRequest>(req)
                     .and_then(move |query| {
