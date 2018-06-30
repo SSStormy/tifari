@@ -3,26 +3,16 @@ use tifari_backend_api::*;
 use std::thread;
 
 fn main() {
+
+    let cfg = get_cfg();
+    let frontend_addr = cfg.get_frontend_address().clone();
+
     let api_thread = thread::spawn(move || {
-        let addr = "127.0.0.1:8001".parse().unwrap();
-        let mut db = backend::TifariDb::new(get_cfg()).unwrap();
-        db.reload_root();
-
-        let server = hyper::server::Http::new().bind(&addr, || { 
-            let cfg = get_cfg();
-            let staticfile = hyper_staticfile::Static::new(std::path::Path::new(cfg.get_root()));
-
-            let service = Search::new(cfg, staticfile);
-            Ok(service)
-        }).unwrap();
-
-        println!("Serving API at 8001");
-        server.run().unwrap();
-
+        println!("Serving API at {}", cfg.get_api_address());
+        run_server(cfg);
     });
 
-
-    let addr = "127.0.0.1:3001".parse().unwrap();
+    let addr = frontend_addr.parse().unwrap();
     let server = hyper::server::Http::new().bind(&addr, || { 
         let mut cwd = std::env::current_dir().unwrap();
         cwd.push("static");
@@ -31,7 +21,7 @@ fn main() {
         Ok(staticfile)
     }).unwrap();
 
-    println!("Serving static frontend at 3001");
+    println!("Serving static frontend at {}" ,frontend_addr);
     server.run().unwrap();
     api_thread.join().unwrap();
 }

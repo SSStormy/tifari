@@ -267,9 +267,42 @@ impl Service for Search {
     }
 }
 
-// TODO : proper config loading etc etc
-pub fn get_cfg() -> backend::TifariConfig {
-    let cfg = std::fs::read_to_string("config.json").unwrap();
-    serde_json::from_str(&cfg).unwrap()
+fn get_default_cfg<T>(e: T) -> backend::TifariConfig 
+    where T: std::error::Error {
+
+    println!("Using the default config due to error when reading config.json.");
+    println!("Error: {:?}", e);
+    backend::TifariConfig::default()
 }
 
+pub fn get_cfg() -> backend::TifariConfig {
+    let cfg = match std::fs::read_to_string("config.json") {
+        Ok(v) => v,
+        Err(e) => return get_default_cfg(e),
+    };
+    
+    match serde_json::from_str(&cfg) {
+        Ok(v) => v,
+        Err(e) => get_default_cfg(e),
+    }
+}
+
+pub fn run_server(config: backend::TifariConfig) {
+
+    let addr = config.get_api_address().parse().unwrap();
+
+    let cfg = Arc::new(RwLock::new(config));
+    let mut db = backend::TifariDb::new(cfg.clone()).unwrap();
+    {
+        let cfg = cfg.clone();
+        db.reload_root(cfg.read().unwrap().get_root());
+    }
+
+    let staticfile = Arc::new(hyper_staticfile::Static::new(std::path::Path::new(cfg.read().unwrap().get_root())));
+
+    let service = APINewService::new(cfg, staticfile);
+
+    let server = hyper::server::Http::new().bind(&addr, service).unwrap();
+
+    server.run().unwrap();
+}

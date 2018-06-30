@@ -18,16 +18,25 @@ use std::collections::HashSet;
 #[derive(Clone, Deserialize, Serialize)]
 pub struct TifariConfig 
 {
+    api_address: String,
+    frontend_address: String,
     db_root : String,
     image_root: String,
 }
 
 impl TifariConfig 
 {
-    pub fn new(db_root: String, image_root: String) -> Self {
-        TifariConfig { db_root, image_root }
+    pub fn default() -> Self {
+        TifariConfig { 
+            api_address: String::from("127.0.0.1:8001"),
+            frontend_address: String::from("127.0.0.1:3555"),
+            db_root: String::from(""),
+            image_root: String::from(""),
+        }
     }
 
+    pub fn get_api_address(&self) -> &String { &self.api_address }
+    pub fn get_frontend_address(&self) -> &String { &self.frontend_address }
     pub fn get_root(&self) -> &String { &self.image_root }
     pub fn get_db_root(&self) -> &String{ &self.db_root }
 }
@@ -483,10 +492,18 @@ impl TifariDb
     pub fn reload_root(&mut self, root: &str) {
         use std::fs;
 
-        println!("Starting root scan at {}", root);
+        println!("Starting root scan at \"{}\"", root);
+
+        let iter = match fs::read_dir(root) {
+            Ok(v) => v,
+            Err(_) => { 
+                println!("Failed to start root scan. The image root directory is most likely invalid.");
+                return;
+            }
+        };
 
         let mut root_imgs = HashSet::new();
-        for entry in fs::read_dir(root).unwrap()
+        for entry in iter
         {
             let entry = match entry {
                 Ok(e) => e,
