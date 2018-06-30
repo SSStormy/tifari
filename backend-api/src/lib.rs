@@ -16,16 +16,11 @@ use std::error::Error;
 
 pub mod error;
 use self::error::*;
+use std::sync::{Arc, RwLock};
 
 pub struct Search {
-    config: backend::TifariConfig,
-    staticfile: hyper_staticfile::Static,
-}
-
-impl Search {
-    pub fn new(config: backend::TifariConfig, staticfile: hyper_staticfile::Static) -> Self {
-        Search { config, staticfile }
-    }
+    config: Arc<RwLock<backend::TifariConfig>>,
+    staticfile: Arc<hyper_staticfile::Static>,
 }
 
 fn conv_result<T, EIn, EOut: From<EIn>>(what: Result<T, EIn>) -> Result<T, EOut> {
@@ -63,6 +58,28 @@ fn get_resp_with_payload(payload: String) -> hyper::Response {
         .with_body(payload)
 }
 
+pub struct APINewService {
+    config: Arc<RwLock<backend::TifariConfig>>,
+    staticfile: Arc<hyper_staticfile::Static>,
+}
+
+impl hyper::server::NewService for APINewService {
+    type Request = Request;
+    type Response = Response;
+    type Error = hyper::Error;
+    type Instance = Search;
+
+    fn new_service(&self) -> Result<Self::Instance, std::io::Error> {
+        Ok(Search{config: self.config.clone(), staticfile: self.staticfile.clone()})
+    }
+}
+
+impl APINewService {
+    pub fn new(config: Arc<RwLock<backend::TifariConfig>>, staticfile: Arc<hyper_staticfile::Static>) -> Self {
+        APINewService { config, staticfile }
+    }
+}
+
 impl Service for Search {
     type Request = Request;
     type Response = Response;
@@ -75,14 +92,13 @@ impl Service for Search {
 
     fn call(&self, req: Request) -> Self::Future {
         println!("Received request. {}", req.path());
-        // TODO: @HACK cloning the config with each request is horrible
-        let cfg = self.config.clone();
 
         // TODO : @HACK, we shouldn't have to box task1
+        let cfg = self.config.clone();
         let task1: Box<Future<Item=Self::Response, Error=APIError>> = match (req.method(), req.path()) {
             (Method::Get, "/api/v1/tag_queue_size") => {
                 let get_response = || {
-                    let db = backend::TifariDb::new(cfg.clone())?;
+                    let db = backend::TifariDb::new(cfg)?;
                     let num = db.get_num_elements_in_tag_queue()?;
                     let payload = serde_json::to_string(&models::TagQueueSizeResponse::new(num))?;
                     Ok(get_resp_with_payload(payload))
@@ -114,7 +130,7 @@ impl Service for Search {
             },
             (Method::Get, "/api/v1/get_all_tags") => {
                 let get_response = || {
-                    let db = backend::TifariDb::new(cfg.clone())?;
+                    let db = backend::TifariDb::new(cfg)?;
                     let tags = db.get_all_tags()?;
                     let payload = serde_json::to_string(&tags)?;
 
@@ -180,7 +196,7 @@ impl Service for Search {
 
                 let get_response = || {
                     let mut db = backend::TifariDb::new(cfg.clone())?;
-                    db.reload_root();
+                    db.reload_root(cfg.read().unwrap().get_root());
                     Ok(get_default_success_response())
               };
 
@@ -190,7 +206,7 @@ impl Service for Search {
             (Method::Get, "/api/v1/tag_queue") => {
 
                 let get_response = || {
-                    let db = backend::TifariDb::new(cfg.clone())?;
+                    let db = backend::TifariDb::new(cfg)?;
                     let queue = db.get_tag_queue()?;
                     let payload = serde_json::to_string(&queue)?;
                     Ok(get_resp_with_payload(payload))

@@ -11,6 +11,7 @@ extern crate serde_derive;
 mod error;
 
 pub use self::error::*;
+use std::sync::{Arc, RwLock};
 
 use std::collections::HashSet;
 
@@ -23,10 +24,6 @@ pub struct TifariConfig
 
 impl TifariConfig 
 {
-    pub fn new_empty() -> Self {
-        TifariConfig::new(String::from(""), String::from(""))
-    }
-
     pub fn new(db_root: String, image_root: String) -> Self {
         TifariConfig { db_root, image_root }
     }
@@ -37,7 +34,6 @@ impl TifariConfig
 
 pub struct TifariDb
 {
-    config: TifariConfig,
     connection: rusqlite::Connection,
 }
 
@@ -227,10 +223,10 @@ impl TifariDb
         Ok(())
     }
 
-    pub fn new(cfg: TifariConfig) -> Result<Self> 
+    pub fn new(cfg: Arc<RwLock<TifariConfig>>) -> Result<Self> 
     {
-        let conn = rusqlite::Connection::open(cfg.get_db_root())?;
-        let db = TifariDb { config: cfg, connection: conn }; 
+        let conn = rusqlite::Connection::open(cfg.read().unwrap().get_db_root())?;
+        let db = TifariDb { connection: conn }; 
 
         db.setup_tables()?;
         Ok(db)
@@ -239,7 +235,7 @@ impl TifariDb
     pub fn new_in_memory() -> Result<Self>
     {
         let conn = rusqlite::Connection::open_in_memory()?;
-        let db = TifariDb { config: TifariConfig::new_empty(), connection: conn }; 
+        let db = TifariDb { connection: conn }; 
         db.setup_tables()?;
 
         Ok(db)
@@ -484,13 +480,13 @@ impl TifariDb
         Ok(db_imgs)
     }
 
-    pub fn reload_root(&mut self) {
+    pub fn reload_root(&mut self, root: &str) {
         use std::fs;
 
-        println!("Starting root scan at {}", self.config.get_root());
+        println!("Starting root scan at {}", root);
 
         let mut root_imgs = HashSet::new();
-        for entry in fs::read_dir(self.config.get_root()).unwrap()
+        for entry in fs::read_dir(root).unwrap()
         {
             let entry = match entry {
                 Ok(e) => e,
