@@ -27,6 +27,8 @@ import Card from '@material-ui/core/Card';
 import Paper from '@material-ui/core/Paper';
 import Drawer from '@material-ui/core/Drawer';
 import Divider from '@material-ui/core/Divider';
+import CardContent from '@material-ui/core/CardContent';
+import CardActions from '@material-ui/core/CardActions';
 import Chip from '@material-ui/core/Chip';
 import Dialog from '@material-ui/core/Dialog';
 import DialogActions from '@material-ui/core/DialogActions';
@@ -437,6 +439,11 @@ class StateMutator {
         return this;
     }
 
+    setDialogSetupState(state) {
+        this.newState.dialogSetup = state;
+        return this;
+    }
+
     setDialogImageRowsState(state) {
         this.newState.dialogImageRowsOpen = state;
         return this;
@@ -518,6 +525,141 @@ function getStorageOrDefault(name, def) {
     return storage ? storage : def;
 }
 
+function getBackendUrl() {
+    return getStorageOrDefault("backendUrl", "http://localhost:8001");
+}
+
+const BS_CONNECTING = 0;
+const BS_CANNOT_CONNECT = 1;
+const BS_SUCCESS = 2;
+const BS_NEEDS_SETUP = 3;
+
+
+class Bootstrapper extends Component {
+    constructor(props) {
+        super(props);
+
+        this.state = {
+            stage: BS_CONNECTING,
+        };
+
+        this.startBootstrap = this.startBootstrap.bind(this);
+    }
+
+    componentWillMount() {
+        this.startBootstrap();
+    }
+
+    startBootstrap() {
+        let api = new TifariAPI(getBackendUrl(), 
+            () => { /*success*/ },
+            () => this.setState({stage: BS_CANNOT_CONNECT})
+        );
+
+        api.getConfigStatus()
+            .then(payload => {
+                switch(payload.state) {
+                    case 0: // valid
+                        this.setState({stage: BS_SUCCESS});
+                        break;
+                    case 1: //invalid image folder
+                        this.setState({stage: BS_NEEDS_SETUP});
+                        break;
+                    case 2: //image folder is not a folder
+                        this.setState({stage: BS_NEEDS_SETUP});
+                        break;
+                }
+            });
+    }
+
+    render() {
+        ldebug("rendering");
+        switch(this.state.stage) {
+            case BS_CONNECTING:
+                return (
+                    <Card className="center-paper">
+                        <CardContent>
+                            <div className="scroller">
+                                <CircularProgress/> 
+                            </div>
+                            <Typography>Connecting to backend</Typography>
+
+                        </CardContent>
+                    </Card>
+                );
+
+            case BS_CANNOT_CONNECT:
+                return (
+                    <Card className="center-paper">
+                        <CardContent>
+                            <Typography>Cannot connect to backend at "{getBackendUrl()}"</Typography>
+                        </CardContent>
+                        <CardActions>
+                            <Button 
+                                size="small" 
+                                color="primary"
+                                onClick={this.startBootstrap}
+                            >
+                               Retry 
+                            </Button>
+                        </CardActions>
+                    </Card>
+                );
+            case BS_SUCCESS:
+                return (
+                    <App/>
+                );
+            case BS_NEEDS_SETUP:
+                return (
+                    <Card className="center-paper">
+                        <CardContent>
+                            <Typography gutterBottom variant="title" color="primary" component="h1">
+                                Setup
+                            </Typography>
+
+                            <Typography gutterBottom variant="subheading" component="h2">
+                                Welcome to Tifari!
+                            </Typography>
+
+                            <Typography component="p">
+                                Tifari needs to know where to look for images. You will have to point it to a folder filled with images.
+                            </Typography>
+
+                            <Typography component="code">
+                                C:\stuff\references\
+                                /home/user/stuff/references
+                            </Typography>
+
+                            <TextField
+                                autoFocus
+                                fullWidth
+                                margin="dense"
+                                id="path"
+                                label="Image folder path"
+                                type="path"
+                                value = {this.state.backendUrlBuffer}
+                                onChange={(ev) => { let val = ev.target.value; this.mutateState(mut => mut.setBackendUrlBuffer(val))}}
+                            />
+                        </CardContent>
+
+                        <CardActions>
+                            <Button 
+                                size="small" 
+                                color="primary"
+                                onClick={() => { this.swapBackendUrl(); this.setDialogBackendUrlState(false);}} color="primary"
+                            >
+                                Set
+                            </Button>
+                        </CardActions>
+                    </Card>
+                );
+            default:
+                return(<Typography>Unknown bootstrap stage: {this.state.stage}.</Typography>);
+        }
+
+    }
+}
+
 class App extends Component {
 
     constructor(props) {
@@ -534,7 +676,6 @@ class App extends Component {
         this.foreignRemoveTagButton= this.foreignRemoveTagButton.bind(this);
         this.foreignReload = this.foreignReload.bind(this);
 
-        const backendUrl = getStorageOrDefault("backendUrl", "http://localhost:8001");
         this.state = {
             activeImageListEnum: IMGS_SEARCH,
             searchImages: { page: 0, arr: []},
@@ -555,17 +696,15 @@ class App extends Component {
             dialogShowTagList: false,
             dialogBackendUrl: false,
             dialogEditConfigOpen: false,
+            dialogSetup: true,
             tagQueueSize: 0,
             searchTagNames: [],
             tags: [],
             tagOrdering: allOrderings[parseInt(getStorageOrDefault("tagOrdering", 0), 10)],
             tabState: 0,
-            api: new TifariAPI(backendUrl, () => this.apiSuccess(), () => this.apiError()),
             apiConnected: null,
         };
-    }
 
-    componentWillMount() {
         this.updateToBeTaggedListSize();
     }
 
@@ -818,6 +957,10 @@ class App extends Component {
             else
                 this.selectImage(img)
         }
+    }
+
+    setDialogSetupState(state) {
+        this.mutateState(mut => mut.setDialogSetupState(state));
     }
 
     setDialogShowTagList(state, target, images) {
@@ -1354,7 +1497,7 @@ class App extends Component {
                         <TextField
                             value={this.state.localConfig.db_root}
                             id="db_root"
-                            label="Database root"
+                            label="Database root (requires restart)"
                             type="text"
                             onChange={this.foreignDialogEditConfigUpdateDbRoot}
                         />
@@ -1409,4 +1552,4 @@ class App extends Component {
     }
 }
 
-export default App;
+export default Bootstrapper;
