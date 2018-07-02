@@ -541,9 +541,11 @@ class Bootstrapper extends Component {
 
         this.state = {
             stage: BS_CONNECTING,
+            imgPath: "",
         };
 
         this.startBootstrap = this.startBootstrap.bind(this);
+        this.submitImageFolderPath = this.submitImageFolderPath.bind(this);
     }
 
     componentWillMount() {
@@ -551,16 +553,33 @@ class Bootstrapper extends Component {
     }
 
     startBootstrap() {
-        let api = new TifariAPI(getBackendUrl(), 
-            () => { /*success*/ },
-            () => this.setState({stage: BS_CANNOT_CONNECT})
-        );
+        let api = null;
 
+        if(!this.state.api) {
+            api = new TifariAPI(getBackendUrl(), 
+                () => { /*success*/ },
+                () => this.setState({stage: BS_CANNOT_CONNECT})
+            );
+            this.setState({api: api});
+        } else {
+            api = this.state.api;
+        }
+
+        api.getConfig()
+            .then(config => {
+                this.setState({localConfig: config});
+                this.requeryConfigState(api, true);
+            });
+    }
+
+    requeryConfigState(api, isInit) {
+        ldebug("requery");
         api.getConfigStatus()
             .then(payload => {
                 switch(payload.state) {
                     case 0: // valid
                         this.setState({stage: BS_SUCCESS});
+                        this.state.api.reload();
                         break;
                     case 1: //invalid image folder
                         this.setState({stage: BS_NEEDS_SETUP});
@@ -572,8 +591,16 @@ class Bootstrapper extends Component {
             });
     }
 
+    submitImageFolderPath() {
+        let cfg = {
+            image_root: this.state.imgPath,
+        };
+
+        this.state.api.setConfig(cfg)
+            .then(() => this.requeryConfigState(this.state.api, false));
+    }
+
     render() {
-        ldebug("rendering");
         switch(this.state.stage) {
             case BS_CONNECTING:
                 return (
@@ -592,7 +619,7 @@ class Bootstrapper extends Component {
                 return (
                     <Card className="center-paper">
                         <CardContent>
-                            <Typography>Cannot connect to backend at "{getBackendUrl()}"</Typography>
+                            <Typography>Cannot connect to the backend at "{getBackendUrl()}"</Typography>
                         </CardContent>
                         <CardActions>
                             <Button 
@@ -607,7 +634,7 @@ class Bootstrapper extends Component {
                 );
             case BS_SUCCESS:
                 return (
-                    <App/>
+                    <App api={this.state.api}/>
                 );
             case BS_NEEDS_SETUP:
                 return (
@@ -625,8 +652,16 @@ class Bootstrapper extends Component {
                                 Tifari needs to know where to look for images. You will have to point it to a folder filled with images.
                             </Typography>
 
+
+                            <Typography component="p">
+                                Example:
+                            </Typography>
+
                             <Typography component="code">
                                 C:\stuff\references\
+                            </Typography>
+
+                            <Typography component="code">
                                 /home/user/stuff/references
                             </Typography>
 
@@ -637,8 +672,8 @@ class Bootstrapper extends Component {
                                 id="path"
                                 label="Image folder path"
                                 type="path"
-                                value = {this.state.backendUrlBuffer}
-                                onChange={(ev) => { let val = ev.target.value; this.mutateState(mut => mut.setBackendUrlBuffer(val))}}
+                                value = {this.state.imgPath}
+                                onChange={(ev) => { let val = ev.target.value; this.setState({imgPath: val})}}
                             />
                         </CardContent>
 
@@ -646,7 +681,7 @@ class Bootstrapper extends Component {
                             <Button 
                                 size="small" 
                                 color="primary"
-                                onClick={() => { this.swapBackendUrl(); this.setDialogBackendUrlState(false);}} color="primary"
+                                onClick={this.submitImageFolderPath}
                             >
                                 Set
                             </Button>
@@ -703,6 +738,7 @@ class App extends Component {
             tagOrdering: allOrderings[parseInt(getStorageOrDefault("tagOrdering", 0), 10)],
             tabState: 0,
             apiConnected: null,
+            api: props.api,
         };
 
         this.updateToBeTaggedListSize();
