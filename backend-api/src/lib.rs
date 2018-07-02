@@ -193,24 +193,34 @@ impl Service for Search {
                 }))
             }
             (Method::Get, "/api/v1/config") => {
-                let cfg = match std::fs::read_to_string("config.json") {
-                    Ok(c) => ok(get_resp_with_payload(c)),
-                    Err(e) => err(APIError::from(e))
-                };
 
-                Box::new(cfg)
+                let cfg_lock = cfg.read().unwrap();
+                let cfg = &(*cfg_lock); // unwraps the lock
+
+                let payload = serde_json::to_string(&cfg).unwrap();
+                Box::new(ok(get_resp_with_payload(payload)))
             },
             (Method::Post, "/api/v1/config") => {
-                let res = req_to_json::<backend::TifariConfig>(req)
-                     .and_then(move |cfg| {
-                         // reserialize to string so that we're sure the cfg is
-                         // correct
-                        conv_result(serde_json::to_vec(&cfg))
+                let cfg1 = cfg.clone();
+                let cfg2 = cfg.clone();
+                let res = req_to_json::<std::collections::HashMap<String, String>>(req)
+                     .and_then(move |patch| {
+                         // modify the config
+                         let mut cfg = cfg1.write().unwrap();
+                         cfg.update(patch);
+
+                         ok(())
                      })
-                     .and_then(move |data| {
-                        conv_result(std::fs::write("config.json", &data))
+                     .and_then(move |()| {
+                         let cfg_lock = cfg2.read().unwrap();
+                         let cfg = &(*cfg_lock); // unwraps the lock
+
+                         conv_result(serde_json::to_string(&cfg))
                      })
-                     .and_then(|()| {
+                     .and_then(move |payload| {
+                        conv_result(std::fs::write("config.json", &payload))
+                     })
+                     .and_then(move |()| {
                          ok(get_default_success_response())
                      });
 

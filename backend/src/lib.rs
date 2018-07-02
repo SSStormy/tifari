@@ -13,7 +13,7 @@ mod error;
 pub use self::error::*;
 use std::sync::{Arc, RwLock};
 
-use std::collections::HashSet;
+use std::collections::{HashSet, HashMap};
 
 #[derive(Clone, Deserialize, Serialize)]
 pub struct TifariConfig 
@@ -30,7 +30,7 @@ impl TifariConfig
         TifariConfig { 
             api_address: String::from("127.0.0.1:8001"),
             frontend_address: String::from("127.0.0.1:3555"),
-            db_root: String::from(""),
+            db_root: String::from("image_and_tag.db"),
             image_root: String::from(""),
         }
     }
@@ -39,6 +39,23 @@ impl TifariConfig
     pub fn get_frontend_address(&self) -> &String { &self.frontend_address }
     pub fn get_root(&self) -> &String { &self.image_root }
     pub fn get_db_root(&self) -> &String{ &self.db_root }
+
+
+    pub fn update(&mut self, patch: HashMap<String, String>) {
+        let mut patch = patch;
+
+        let mut apply_patch = |var: &mut String, var_name: &str| {
+            match patch.remove(var_name) {
+                Some(val) => *var = val,
+                None => {},
+            }
+        };
+
+        apply_patch(&mut self.api_address, "api_address");
+        apply_patch(&mut self.frontend_address, "frontend_address");
+        apply_patch(&mut self.db_root, "db_root");
+        apply_patch(&mut self.image_root, "image_root");
+    }
 }
 
 pub struct TifariDb
