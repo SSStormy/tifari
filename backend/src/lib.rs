@@ -61,10 +61,19 @@ impl TifariConfig
 pub struct TifariDb
 {
     connection: rusqlite::Connection,
+    scan: ScanData,
+}
+
+pub struct ScanData {
+    is_scanning: std::sync::atomic::AtomicBool,
+    scan_total: i64,
+    scan_current: i64,
 }
 
 impl TifariDb 
 {
+    pub fn get_scan_data(&self) -> &ScanData { &self.scan }
+
     pub fn get_image_from_db(&self, id: i64) -> Result<models::Image>
     {
         let (id, path, time): (i64, String, i64) = self.connection.query_row(
@@ -252,7 +261,7 @@ impl TifariDb
     pub fn new(cfg: Arc<RwLock<TifariConfig>>) -> Result<Self> 
     {
         let conn = rusqlite::Connection::open(cfg.read().unwrap().get_db_root())?;
-        let db = TifariDb { connection: conn }; 
+        let db = TifariDb { connection: conn, scan: ScanData{is_scanning: std::sync::atomic::AtomicBool::new(false), scan_total: 0, scan_current: 0} }; 
 
         db.setup_tables()?;
         Ok(db)
@@ -261,7 +270,7 @@ impl TifariDb
     pub fn new_in_memory() -> Result<Self>
     {
         let conn = rusqlite::Connection::open_in_memory()?;
-        let db = TifariDb { connection: conn }; 
+        let db = TifariDb { connection: conn, scan: ScanData{is_scanning: std::sync::atomic::AtomicBool::new(false), scan_total: 0, scan_current: 0} }; 
         db.setup_tables()?;
 
         Ok(db)
@@ -506,7 +515,7 @@ impl TifariDb
         Ok(db_imgs)
     }
 
-    pub fn reload_root(&mut self, root: &str) {
+    pub fn reload_root_unsafe(&mut self, root: &str) {
         use std::fs;
 
         println!("Starting root scan at \"{}\"", root);
@@ -569,6 +578,20 @@ impl TifariDb
         }
         
         println!("Done.");
+
+    }
+
+    pub fn reload_root(&mut self, root: &str) {
+
+        if self.scan.is_scanning.load(std::sync::atomic::Ordering::Acquire) {
+            return;
+        }
+
+        self.scan.is_scanning.store(true, std::sync::atomic::Ordering::Release);
+
+        self.reload_root_unsafe(root);
+
+        self.scan.is_scanning.store(false, std::sync::atomic::Ordering::Release);
     }
 }
 
