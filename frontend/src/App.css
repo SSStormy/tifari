@@ -6,6 +6,10 @@
     padding: 16px;
 }
 
+.center-paper .progress {
+    flex-grow: 1;
+}
+
 .center-paper .scroller {
     position: relative;
     display: flex;

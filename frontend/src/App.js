@@ -4,6 +4,7 @@ import './App.css';
 import TifariAPI from "./APIComms.js";
 import { ldebug } from "./Logging.js";
 
+import LinearProgress from '@material-ui/core/LinearProgress';
 import FormControlLabel from '@material-ui/core/FormControlLabel';
 import Checkbox from '@material-ui/core/Checkbox';
 import Collapse from '@material-ui/core/Collapse';
@@ -533,7 +534,7 @@ const BS_CONNECTING = 0;
 const BS_CANNOT_CONNECT = 1;
 const BS_SUCCESS = 2;
 const BS_NEEDS_SETUP = 3;
-
+const BS_SCANNING = 4;
 
 class Bootstrapper extends Component {
     constructor(props) {
@@ -542,6 +543,8 @@ class Bootstrapper extends Component {
         this.state = {
             stage: BS_CONNECTING,
             imgPath: "",
+            scanTotal: 0,
+            scanCurrent: 0,
         };
 
         this.startBootstrap = this.startBootstrap.bind(this);
@@ -574,9 +577,9 @@ class Bootstrapper extends Component {
 
     requeryConfigState(api, isInit) {
         ldebug("requery");
-        api.getConfigStatus()
+        api.getStatus()
             .then(payload => {
-                switch(payload.state) {
+                switch(payload.status) {
                     case 0: // valid
                         this.setState({stage: BS_SUCCESS});
                         this.state.api.reload();
@@ -586,6 +589,16 @@ class Bootstrapper extends Component {
                         break;
                     case 2: //image folder is not a folder
                         this.setState({stage: BS_NEEDS_SETUP});
+                        break;
+                    case 3:
+                        if(!this.state.stage != BS_SCANNING) {
+                            this.setState({
+                                stage: BS_SCANNING, 
+                                scanTotal: payload.scan_total,
+                                scanCurrent: payload.scan_current,
+                            });
+                            setTimeout(() => this.requeryConfigState(api, isInit), 1000);
+                        }
                         break;
                 }
             });
@@ -601,7 +614,35 @@ class Bootstrapper extends Component {
     }
 
     render() {
+        ldebug("render boostrap");
         switch(this.state.stage) {
+            case BS_SCANNING:
+                return (
+                    <Card className="center-paper" style={{width: "50%"}}>
+                        <CardContent>
+                            <div className="progress">
+                                <LinearProgress 
+                                    variant="determinate" 
+                                    value={100 * (this.state.scanCurrent/ this.state.scanTotal)}
+                                />
+                            </div>
+
+                            <Typography component="p" style={{float: "left"}}>
+                                Cataloguing images into the database
+                            </Typography>
+                            <Typography component="p" style={{float: "right"}}>
+                                {this.state.scanCurrent}/{this.state.scanTotal}
+                            </Typography>
+
+                            <br/>
+
+                            <Typography style={{float: "left"}}component="p">
+                                You may close this tab and check back later.
+                            </Typography>
+
+                        </CardContent>
+                    </Card>
+                );
             case BS_CONNECTING:
                 return (
                     <Card className="center-paper">

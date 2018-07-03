@@ -26,7 +26,7 @@ class TifariAPI {
         this.endpoint.reloadRoot = endpoint + "/api/v1/reload";
         this.endpoint.config= endpoint + "/api/v1/config";
         this.endpoint.image= endpoint + "/";
-        this.endpoint.configStatus = endpoint + "/api/v1/config_status";
+        this.endpoint.status= endpoint + "/api/v1/status";
     }
 
     errHandle(err) {
@@ -38,9 +38,9 @@ class TifariAPI {
         return val;
     }
 
-    getConfigStatus() {
+    getStatus() {
         return this.doRequest(() => 
-            fetch(this.endpoint.configStatus, { method: "GET"})
+            fetch(this.endpoint.status, { method: "GET"})
                 .then(results => results.json())
         );
     }
