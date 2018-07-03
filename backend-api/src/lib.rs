@@ -21,7 +21,51 @@ use std::sync::{Arc, RwLock};
 pub struct Search {
     config: Arc<RwLock<backend::TifariConfig>>,
     staticfile: Arc<hyper_staticfile::Static>,
+    scan: Arc<backend::ScanData>,
 }
+
+pub struct APINewService {
+    config: Arc<RwLock<backend::TifariConfig>>,
+    staticfile: Arc<hyper_staticfile::Static>,
+    scan: Arc<backend::ScanData>,
+}
+
+impl hyper::server::NewService for APINewService {
+    type Request = Request;
+    type Response = Response;
+    type Error = hyper::Error;
+    type Instance = Search;
+
+    fn new_service(&self) -> Result<Self::Instance, std::io::Error> {
+        Ok(Search {
+                config: self.config.clone(), 
+                staticfile: self.staticfile.clone(),
+                scan: self.scan.clone()
+           }
+       )
+    }
+}
+
+impl APINewService {
+    pub fn new(
+        config: Arc<RwLock<backend::TifariConfig>>, 
+        staticfile: Arc<hyper_staticfile::Static>,
+        scan: Arc<backend::ScanData>,
+        ) -> Self {
+        APINewService { config, staticfile, scan }
+    }
+}
+
+#[derive(Serialize)]
+pub enum APIStatusEnum {
+    Valid = 0,
+    InvalidImageFolder = 1,
+    ImageFolderIsNotAFolder = 2,
+    Scanning = 3,
+}
+
+#[macro_use]
+extern crate serde_derive;
 
 fn conv_result<T, EIn, EOut: From<EIn>>(what: Result<T, EIn>) -> Result<T, EOut> {
     match what {
@@ -58,34 +102,6 @@ fn get_resp_with_payload(payload: String) -> hyper::Response {
         .with_body(payload)
 }
 
-pub struct APINewService {
-    config: Arc<RwLock<backend::TifariConfig>>,
-    staticfile: Arc<hyper_staticfile::Static>,
-}
-
-impl hyper::server::NewService for APINewService {
-    type Request = Request;
-    type Response = Response;
-    type Error = hyper::Error;
-    type Instance = Search;
-
-    fn new_service(&self) -> Result<Self::Instance, std::io::Error> {
-        Ok(Search{config: self.config.clone(), staticfile: self.staticfile.clone()})
-    }
-}
-
-impl APINewService {
-    pub fn new(config: Arc<RwLock<backend::TifariConfig>>, staticfile: Arc<hyper_staticfile::Static>) -> Self {
-        APINewService { config, staticfile }
-    }
-}
-
-pub enum ConfigStatus {
-    Valid = 0,
-    InvalidImageFolder = 1,
-    ImageFolderIsNotAFolder = 2,
-}
-
 impl Service for Search {
     type Request = Request;
     type Response = Response;
@@ -99,23 +115,39 @@ impl Service for Search {
     fn call(&self, req: Request) -> Self::Future {
         println!("Received request. {}", req.path());
 
-        // TODO : @HACK, we shouldn't have to box task1
         let cfg = self.config.clone();
+        let scan = self.scan.clone();
         let task1: Box<Future<Item=Self::Response, Error=APIError>> = match (req.method(), req.path()) {
-            (Method::Get, "/api/v1/config_status") => {
+            (Method::Get, "/api/v1/status") => {
+
+                #[derive(Serialize)]
+                struct APIStatus { 
+                    status: i64,
+                    scan_total: usize,
+                    scan_current: usize,
+                }
 
                 let get_status = || {
+                    let is_scanning = scan.is_scanning();
+                    println!("Scan {}", is_scanning);
+                    if is_scanning { return APIStatusEnum::Scanning; }
+
                     let metadata = match std::fs::metadata(cfg.read().unwrap().get_root()) {
                         Ok(v) => v,
-                        Err(_) => return ConfigStatus::InvalidImageFolder,
+                        Err(_) => return APIStatusEnum::InvalidImageFolder,
                     };
 
-                    if !metadata.is_dir() { return ConfigStatus::ImageFolderIsNotAFolder }
+                    if !metadata.is_dir() { return APIStatusEnum::ImageFolderIsNotAFolder }
 
-                    ConfigStatus::Valid
+                    APIStatusEnum::Valid
                 };
 
-                let payload = format!("{{\"state\": {}}}", get_status() as i32);
+                let payload = serde_json::to_string(
+                    &APIStatus{
+                        status: get_status() as i64, 
+                        scan_total: scan.get_scan_total(),
+                        scan_current: scan.get_scan_current(),
+                    }).unwrap();
 
                 Box::new(ok(get_resp_with_payload(payload)))
             },
@@ -230,7 +262,7 @@ impl Service for Search {
 
                 let get_response = || {
                     let mut db = backend::TifariDb::new(cfg.clone())?;
-                    db.reload_root(cfg.read().unwrap().get_root());
+                    db.reload_root(cfg.read().unwrap().get_root(), scan);
                     Ok(get_default_success_response())
               };
 
@@ -323,19 +355,24 @@ pub fn get_cfg() -> backend::TifariConfig {
 
 pub fn run_server(config: backend::TifariConfig) {
 
+    use std::thread;
     let addr = config.get_api_address().parse().unwrap();
-
     let cfg = Arc::new(RwLock::new(config));
-    let mut db = backend::TifariDb::new(cfg.clone()).unwrap();
+    let scan = Arc::new(backend::ScanData::default());
+
+
     {
         let cfg = cfg.clone();
-        db.reload_root(cfg.read().unwrap().get_root());
+        let scan = scan.clone();
+        let _scan_thread = thread::spawn(move || {
+            let mut db = backend::TifariDb::new(cfg.clone()).unwrap();
+            db.setup_tables().unwrap();
+            db.reload_root(cfg.read().unwrap().get_root(), scan);
+        });
     }
 
     let staticfile = Arc::new(hyper_staticfile::Static::new(std::path::Path::new(cfg.read().unwrap().get_root())));
-
-    let service = APINewService::new(cfg, staticfile);
-
+    let service = APINewService::new(cfg, staticfile, scan);
     let server = hyper::server::Http::new().bind(&addr, service).unwrap();
 
     server.run().unwrap();

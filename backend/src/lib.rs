@@ -24,6 +24,41 @@ pub struct TifariConfig
     image_root: String,
 }
 
+pub struct ScanData {
+    is_scanning: std::sync::atomic::AtomicBool,
+    scan_total: std::sync::atomic::AtomicUsize,
+    scan_current: std::sync::atomic::AtomicUsize,
+}
+
+impl ScanData {
+    pub fn default() -> Self {
+        ScanData {
+            is_scanning: std::sync::atomic::AtomicBool::new(false), 
+            scan_total: std::sync::atomic::AtomicUsize::new(0), 
+            scan_current: std::sync::atomic::AtomicUsize::new(0), 
+        }
+    }
+
+    pub fn is_scanning(&self) -> bool 
+    { self.is_scanning.load(std::sync::atomic::Ordering::Acquire) }
+
+    pub fn get_scan_total(&self) -> usize
+    { self.scan_total.load(std::sync::atomic::Ordering::Acquire) }
+
+    pub fn get_scan_current(&self) -> usize
+    { self.scan_current.load(std::sync::atomic::Ordering::Acquire) }
+
+    pub fn set_is_scanning(&self, state: bool)
+    { self.is_scanning.store(state, std::sync::atomic::Ordering::Release) }
+
+    pub fn set_scan_total(&self, total: usize)
+    { self.scan_total.store(total, std::sync::atomic::Ordering::Release) }
+
+    pub fn set_scan_current(&self, current: usize)
+    { self.scan_current.store(current, std::sync::atomic::Ordering::Release) }
+
+}
+
 impl TifariConfig 
 {
     pub fn default() -> Self {
@@ -61,19 +96,10 @@ impl TifariConfig
 pub struct TifariDb
 {
     connection: rusqlite::Connection,
-    scan: ScanData,
-}
-
-pub struct ScanData {
-    is_scanning: std::sync::atomic::AtomicBool,
-    scan_total: i64,
-    scan_current: i64,
 }
 
 impl TifariDb 
 {
-    pub fn get_scan_data(&self) -> &ScanData { &self.scan }
-
     pub fn get_image_from_db(&self, id: i64) -> Result<models::Image>
     {
         let (id, path, time): (i64, String, i64) = self.connection.query_row(
@@ -232,7 +258,7 @@ impl TifariDb
         Ok(())
     }
 
-    fn setup_tables(&self) -> Result<()> {
+    pub fn setup_tables(&self) -> Result<()> {
         self.connection.execute_batch("
             BEGIN;
 
@@ -261,17 +287,15 @@ impl TifariDb
     pub fn new(cfg: Arc<RwLock<TifariConfig>>) -> Result<Self> 
     {
         let conn = rusqlite::Connection::open(cfg.read().unwrap().get_db_root())?;
-        let db = TifariDb { connection: conn, scan: ScanData{is_scanning: std::sync::atomic::AtomicBool::new(false), scan_total: 0, scan_current: 0} }; 
+        let db = TifariDb { connection: conn };
 
-        db.setup_tables()?;
         Ok(db)
     }
 
     pub fn new_in_memory() -> Result<Self>
     {
         let conn = rusqlite::Connection::open_in_memory()?;
-        let db = TifariDb { connection: conn, scan: ScanData{is_scanning: std::sync::atomic::AtomicBool::new(false), scan_total: 0, scan_current: 0} }; 
-        db.setup_tables()?;
+        let db = TifariDb { connection: conn };
 
         Ok(db)
     }
@@ -515,7 +539,7 @@ impl TifariDb
         Ok(db_imgs)
     }
 
-    pub fn reload_root_unsafe(&mut self, root: &str) {
+    pub fn reload_root_unsafe(&mut self, root: &str, scan: &Arc<ScanData>) {
         use std::fs;
 
         println!("Starting root scan at \"{}\"", root);
@@ -528,9 +552,12 @@ impl TifariDb
             }
         };
 
+
         let mut root_imgs = HashSet::new();
+
         for entry in iter
         {
+        
             let entry = match entry {
                 Ok(e) => e,
                 Err(e) => { 
@@ -549,7 +576,7 @@ impl TifariDb
 
             if data.is_file() {
                 let path = entry.path().file_name().unwrap().to_string_lossy().to_string();
-                println!("Found initial file: {:?}", path);
+//                println!("Found initial file: {:?}", path);
                 root_imgs.insert(path);
             }
         }
@@ -562,17 +589,29 @@ impl TifariDb
             }
         };
 
+        scan.set_scan_total(db_imgs.difference(&root_imgs).count() + root_imgs.difference(&db_imgs).count());
+
+        let mut scan_current = 1;
+
         for path_to_rm in db_imgs.difference(&root_imgs) {
+
+            scan.set_scan_current(scan_current);
+            scan_current += 1;
+
             
             match self.erase_image(&path_to_rm) {
-                Ok(()) => println!("Erasing image: {}", path_to_rm),
+                Ok(()) => {}, //println!("Erasing image: {}", path_to_rm),
                 Err(e) => println!("failed to erase image {}. Error: {:?}", path_to_rm, e),
             } 
         }
 
         for path_to_add in root_imgs.difference(&db_imgs) {
+
+            scan.set_scan_current(scan_current);
+            scan_current += 1;
+
             match self.try_insert_image(&path_to_add) {
-                Ok(id) => println!("Adding new image: {} {}", path_to_add, id),
+                Ok(id) => {},//println!("Adding new image: {} {}", path_to_add, id),
                 Err(e) => println!("Failed to insert new image {} to image db. Error: {:?}", path_to_add, e),
             };
         }
@@ -581,17 +620,18 @@ impl TifariDb
 
     }
 
-    pub fn reload_root(&mut self, root: &str) {
-
-        if self.scan.is_scanning.load(std::sync::atomic::Ordering::Acquire) {
+    pub fn reload_root(&mut self, root: &str, scan: Arc<ScanData>) {
+        if scan.is_scanning.load(std::sync::atomic::Ordering::Acquire) {
             return;
         }
 
-        self.scan.is_scanning.store(true, std::sync::atomic::Ordering::Release);
+        scan.set_is_scanning(true);
 
-        self.reload_root_unsafe(root);
+        self.reload_root_unsafe(root, &scan);
 
-        self.scan.is_scanning.store(false, std::sync::atomic::Ordering::Release);
+        scan.set_is_scanning(false);
+        scan.set_scan_total(0);
+        scan.set_scan_current(0);
     }
 }
 
@@ -602,7 +642,7 @@ mod tests {
     #[test]
     fn db_image_insertion()
     {
-        let mut db = TifariDb::new_in_memory().unwrap();
+        let mut db = TifariDb::new_in_memory().unwrap().setup_tables();
         db.try_insert_image(&"test/img.png").unwrap();
         assert!(db.try_insert_image(&"test/img.png") .is_err());
     }
@@ -610,7 +650,7 @@ mod tests {
     #[test]
     fn db_image_erase()
     {
-        let mut db = TifariDb::new_in_memory().unwrap();
+        let mut db = TifariDb::new_in_memory().unwrap().setup_tables();
         let img = "test/img.png";
 
         assert!(db.erase_image(&img).is_err());
@@ -622,7 +662,7 @@ mod tests {
     #[test]
     fn db_image_tag()
     {
-        let mut db = TifariDb::new_in_memory().unwrap();
+        let mut db = TifariDb::new_in_memory().unwrap().setup_tables();
         let img = "test/img.png";
 
         let tag1 = "tag_1";
@@ -650,7 +690,7 @@ mod tests {
 
     #[test]
     fn db_consistent_tag_ids() {
-        let mut db = TifariDb::new_in_memory().unwrap();
+        let mut db = TifariDb::new_in_memory().unwrap().setup_tables();
 
         let img1 = "img1";
         let img2 = "img2";
@@ -689,7 +729,7 @@ mod tests {
     #[test]
     fn db_duplicate_tags()
     {
-        let mut db = TifariDb::new_in_memory().unwrap();
+        let mut db = TifariDb::new_in_memory().unwrap().setup_tables();
         let img = "test/img.png";
 
         let tag1 = "tag_1";
@@ -704,7 +744,7 @@ mod tests {
 
     #[test]
     fn db_tag_queue_element_counter() {
-        let mut db = TifariDb::new_in_memory().unwrap();
+        let mut db = TifariDb::new_in_memory().unwrap().setup_tables();
 
         let img1 = "test/img1.png";
         let img2 = "test/img2.png";
@@ -740,7 +780,7 @@ mod tests {
 
     #[test]
     fn db_tag_queue_gets_filled_when_tags_are_removed_from_images() {
-        let mut db = TifariDb::new_in_memory().unwrap();
+        let mut db = TifariDb::new_in_memory().unwrap().setup_tables();
 
         let img1 = "test/img1.png";
         let img2 = "test/img2.png";
@@ -813,7 +853,7 @@ mod tests {
     #[test]
     fn db_tag_queue() 
     {
-        let mut db = TifariDb::new_in_memory().unwrap();
+        let mut db = TifariDb::new_in_memory().unwrap().setup_tables();
         let img1 = "test/img1.png";
         let img2 = "test/img2.png";
 
@@ -866,7 +906,7 @@ mod tests {
 
         let no_tag3 = "-tag3";
 
-        let mut db = TifariDb::new_in_memory().unwrap();
+        let mut db = TifariDb::new_in_memory().unwrap().setup_tables();
 
         let img1_id = db.try_insert_image(&img1).unwrap();
         let img2_id = db.try_insert_image(&img2).unwrap();
@@ -894,7 +934,7 @@ mod tests {
 
     #[test]
     fn db_disallow_some_tags() {
-        let mut db = TifariDb::new_in_memory().unwrap();
+        let mut db = TifariDb::new_in_memory().unwrap().setup_tables();
         let img = db.try_insert_image("image").unwrap();
 
         assert!(db.give_tag(img, &"").is_err());
@@ -916,7 +956,7 @@ mod tests {
         let tag2 = "tag2";
         let tag3 = "tag3";
 
-        let mut db = TifariDb::new_in_memory().unwrap();
+        let mut db = TifariDb::new_in_memory().unwrap().setup_tables();
 
         let img1_id = db.try_insert_image(&img1).unwrap();
         let tag1_id = db.give_tag(img1_id, &tag1).unwrap();
@@ -945,7 +985,7 @@ mod tests {
             assert_eq!(results[0].get_id(), img1_id);
         }
 
-        let mut db = TifariDb::new_in_memory().unwrap();
+        let mut db = TifariDb::new_in_memory().unwrap().setup_tables();
 
         let img1_id = db.try_insert_image(&img1).unwrap();
         let tag1_id = db.give_tag(img1_id, &tag1).unwrap();
