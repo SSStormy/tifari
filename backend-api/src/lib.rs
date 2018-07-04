@@ -16,18 +16,20 @@ use std::error::Error;
 
 pub mod error;
 use self::error::*;
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, RwLock, Condvar, Mutex};
 
 pub struct Search {
     config: Arc<RwLock<backend::TifariConfig>>,
     staticfile: Arc<hyper_staticfile::Static>,
     scan: Arc<backend::ScanData>,
+    scan_signal: Arc<(Mutex<bool>, Condvar)>,
 }
 
 pub struct APINewService {
     config: Arc<RwLock<backend::TifariConfig>>,
     staticfile: Arc<hyper_staticfile::Static>,
     scan: Arc<backend::ScanData>,
+    scan_signal: Arc<(Mutex<bool>, Condvar)>,
 }
 
 impl hyper::server::NewService for APINewService {
@@ -40,7 +42,8 @@ impl hyper::server::NewService for APINewService {
         Ok(Search {
                 config: self.config.clone(), 
                 staticfile: self.staticfile.clone(),
-                scan: self.scan.clone()
+                scan: self.scan.clone(),
+                scan_signal: self.scan_signal.clone(),
            }
        )
     }
@@ -51,8 +54,9 @@ impl APINewService {
         config: Arc<RwLock<backend::TifariConfig>>, 
         staticfile: Arc<hyper_staticfile::Static>,
         scan: Arc<backend::ScanData>,
+        scan_signal: Arc<(Mutex<bool>, Condvar)>,
         ) -> Self {
-        APINewService { config, staticfile, scan }
+        APINewService { config, staticfile, scan, scan_signal }
     }
 }
 
@@ -100,6 +104,15 @@ fn get_resp_with_payload(payload: String) -> hyper::Response {
         .with_status(StatusCode::Ok)
         .with_header(ContentLength(payload.len() as u64))
         .with_body(payload)
+}
+
+impl Search {
+    pub fn reload_backend(&self) {
+        let &(ref lock, ref condvar) = &(*self.scan_signal);
+        let mut should_scan = lock.lock().unwrap();
+        *should_scan = true;
+        condvar.notify_one();
+    }
 }
 
 impl Service for Search {
@@ -259,14 +272,8 @@ impl Service for Search {
                 Box::new(res)
             },
             (Method::Get, "/api/v1/reload") => {
-
-                let get_response = || {
-                    let mut db = backend::TifariDb::new(cfg.clone())?;
-                    db.reload_root(cfg.read().unwrap().get_root(), scan);
-                    Ok(get_default_success_response())
-              };
-
-                Box::new(FutureResult::from(get_response()))
+                self.reload_backend();
+                Box::new(ok(get_default_success_response()))
             },
             
             (Method::Get, "/api/v1/tag_queue") => {
@@ -360,19 +367,36 @@ pub fn run_server(config: backend::TifariConfig) {
     let cfg = Arc::new(RwLock::new(config));
     let scan = Arc::new(backend::ScanData::default());
 
+    let scan_signal = Arc::new((Mutex::new(false), Condvar::new()));
 
     {
         let cfg = cfg.clone();
         let scan = scan.clone();
+        let scan_signal = scan_signal.clone();
+
         let _scan_thread = thread::spawn(move || {
+
             let mut db = backend::TifariDb::new(cfg.clone()).unwrap();
             db.setup_tables().unwrap();
-            db.reload_root(cfg.read().unwrap().get_root(), scan);
+            db.reload_root(cfg.read().unwrap().get_root(), scan.clone());
+
+            loop{
+                let &(ref lock, ref condvar) = &(*scan_signal);
+                let mut should_scan = lock.lock().unwrap();
+
+                while !*should_scan {
+                    should_scan = condvar.wait(should_scan).unwrap();
+                }
+
+                db.reload_root(cfg.read().unwrap().get_root(), scan.clone());
+
+                *should_scan = false;
+            }
         });
     }
 
     let staticfile = Arc::new(hyper_staticfile::Static::new(std::path::Path::new(cfg.read().unwrap().get_root())));
-    let service = APINewService::new(cfg, staticfile, scan);
+    let service = APINewService::new(cfg, staticfile, scan, scan_signal);
     let server = hyper::server::Http::new().bind(&addr, service).unwrap();
 
     server.run().unwrap();
