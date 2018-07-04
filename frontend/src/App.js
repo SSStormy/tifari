@@ -554,6 +554,7 @@ class Bootstrapper extends Component {
             imgPath: "",
             scanTotal: 0,
             scanCurrent: 0,
+            imgPathError: null,
         };
 
         this.startBootstrap = this.startBootstrap.bind(this);
@@ -591,13 +592,13 @@ class Bootstrapper extends Component {
             ldebug(payload);
             switch(payload.status) {
                 case 0: // valid
-                    this.setState({stage: BS_SUCCESS});
+                    this.setState({stage: BS_SUCCESS, imgPathError: null});
                     break;
                 case 1: //invalid image folder
-                    this.setState({stage: BS_NEEDS_SETUP});
+                    this.setState({stage: BS_NEEDS_SETUP, imgPathError: !isInit ? "Invalid image folder.": null});
                     break;
                 case 2: //image folder is not a folder
-                    this.setState({stage: BS_NEEDS_SETUP});
+                    this.setState({stage: BS_NEEDS_SETUP, imgPathError: !isInit ? "Image folder is not a folder.": null});
                     break;
                 case 3:
                     if(!this.state.stage !== BS_SCANNING) {
@@ -605,8 +606,9 @@ class Bootstrapper extends Component {
                             stage: BS_SCANNING, 
                             scanTotal: payload.scan_total,
                             scanCurrent: payload.scan_current,
+                            imgPathError: null,
                         });
-                        setTimeout(() => this.requeryConfigState(api, isInit), 1000);
+                        setTimeout(() => this.requeryConfigState(api, false), 1000);
                     }
                     break;
                 default:
@@ -618,7 +620,7 @@ class Bootstrapper extends Component {
     }
 
     foreignUpdateStatus() {
-        return this.requeryConfigState(this.state.api, true);
+        return this.requeryConfigState(this.state.api, false);
     }
 
     submitImageFolderPath() {
@@ -738,6 +740,12 @@ class Bootstrapper extends Component {
                             <Typography component="code">
                                 /home/user/stuff/references
                             </Typography>
+
+                            {this.state.imgPathError&& 
+                                <Typography color="secondary" component="p">
+                                    {this.state.imgPathError}
+                                </Typography>
+                            }
 
                             <TextField
                                 autoFocus
@@ -1136,9 +1144,6 @@ class App extends Component {
             .then(() => this.state.api.getStatus()
                 .then(payload => {
                     switch(payload.status) {
-                        case 0: //valid
-                            this.setDialogEditConfigState(false);
-                            break;
                         case 1: //invalid img folder
                             this.state.api.setConfig(this.state.localConfigBackup)
                             this.setDialogEditConfigError("Invalid image folder");
@@ -1147,11 +1152,9 @@ class App extends Component {
                             this.state.api.setConfig(this.state.localConfigBackup)
                             this.setDialogEditConfigError("The image folder is not a folder.");
                             break;
-                        case 3: // scanning
-                            this.props.updateStatus();
-                            break;
                         default:
-                            this.props.updateStatus();
+                            this.setDialogEditConfigState(false);
+                            this.foreignReload();
                             break;
                     }
                 }));
