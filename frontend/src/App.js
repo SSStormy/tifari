@@ -418,15 +418,26 @@ class StateMutator {
         return this;
     }
 
-    setDialogEditConfigState(state) {
+    setDialogEditConfigState(state, error) {
         this.newState.dialogEditConfigOpen= state;
         return this;
+    }
+
+    setDialogEditConfigError(error) {
+        this.newState.dialogEditConfigError = error;
     }
 
     setLocalConfig(cfg) {
         this.newState.localConfig = cfg;
         return this;
     }
+
+    setLocalConfigAndBackup(cfg) {
+        this.setLocalConfig(cfg);
+        this.newState.localConfigBackup = JSON.parse(JSON.stringify(cfg));
+        return this;
+    }
+
 
     setDialogBackendUrlState(state) {
         this.newState.dialogBackendUrl = state;
@@ -780,6 +791,7 @@ class App extends Component {
             selectedImages: {page: 0, arr: []},
             toBeTaggedImages: {page: 0, arr: []},
             localConfig: {},
+            localConfigBackup: {},
 
             isLoadingSearch: false,
 
@@ -794,6 +806,7 @@ class App extends Component {
             dialogShowTagList: false,
             dialogBackendUrl: false,
             dialogEditConfigOpen: false,
+            dialogEditConfigError: null,
             dialogSetup: true,
             tagQueueSize: 0,
             searchTagNames: [],
@@ -1076,12 +1089,19 @@ class App extends Component {
         });
     }
 
+    setDialogEditConfigError(error) {
+        this.mutateState(mut =>
+            mut.setDialogEditConfigError(error)
+        );
+    }
+
     setDialogEditConfigState(state) {
         if(state) {
             this.state.api.getConfig().then(cfg => {
                 this.mutateState(mut => { 
-                    mut.setLocalConfig(cfg);
+                    mut.setLocalConfigAndBackup(cfg);
                     mut.setDialogEditConfigState(state);
+                    mut.setDialogEditConfigError(null);
                 });
             })
         } else {
@@ -1112,8 +1132,29 @@ class App extends Component {
     }
 
     dialogEditConfigSubmit() {
-        this.state.api.setConfig(this.state.localConfig);
-        this.setDialogEditConfigState(false);
+        this.state.api.setConfig(this.state.localConfig)
+            .then(() => this.state.api.getStatus()
+                .then(payload => {
+                    switch(payload.status) {
+                        case 0: //valid
+                            this.setDialogEditConfigState(false);
+                            break;
+                        case 1: //invalid img folder
+                            this.state.api.setConfig(this.state.localConfigBackup)
+                            this.setDialogEditConfigError("Invalid image folder");
+                            break;
+                        case 2: // image folder is not a folder
+                            this.state.api.setConfig(this.state.localConfigBackup)
+                            this.setDialogEditConfigError("The image folder is not a folder.");
+                            break;
+                        case 3: // scanning
+                            this.props.updateStatus();
+                            break;
+                        default:
+                            this.props.updateStatus();
+                            break;
+                    }
+                }));
     }
 
     foreignDialogEditConfigUpdateDbRoot(e) {
@@ -1596,6 +1637,7 @@ class App extends Component {
                             value={this.state.localConfig.db_root}
                             id="db_root"
                             label="Database root (requires restart)"
+                            fullWidth
                             type="text"
                             onChange={this.foreignDialogEditConfigUpdateDbRoot}
                         />
@@ -1604,9 +1646,16 @@ class App extends Component {
                             value={this.state.localConfig.image_root}
                             id="image_root"
                             label="Image root"
+                            fullWidth
                             type="text"
                             onChange={this.foreignDialogEditConfigUpdateImageRoot}
                         />
+
+                        {this.state.dialogEditConfigError && 
+                            <Typography color="secondary" component="p">
+                                {this.state.dialogEditConfigError}
+                            </Typography>
+                        }
                     </DialogContent>
 
                     <DialogActions>
