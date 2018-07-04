@@ -8,3 +8,4 @@ config.json
 frontend/build/
 prod/static/
 *.db-journal
+release/
