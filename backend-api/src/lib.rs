@@ -20,14 +20,14 @@ use std::sync::{Arc, RwLock, Condvar, Mutex};
 
 pub struct Search {
     config: Arc<RwLock<backend::TifariConfig>>,
-    staticfile: Arc<hyper_staticfile::Static>,
+    staticfile: Arc<RwLock<hyper_staticfile::Static>>,
     scan: Arc<backend::ScanData>,
     scan_signal: Arc<(Mutex<bool>, Condvar)>,
 }
 
 pub struct APINewService {
     config: Arc<RwLock<backend::TifariConfig>>,
-    staticfile: Arc<hyper_staticfile::Static>,
+    staticfile: Arc<RwLock<hyper_staticfile::Static>>,
     scan: Arc<backend::ScanData>,
     scan_signal: Arc<(Mutex<bool>, Condvar)>,
 }
@@ -52,7 +52,7 @@ impl hyper::server::NewService for APINewService {
 impl APINewService {
     pub fn new(
         config: Arc<RwLock<backend::TifariConfig>>, 
-        staticfile: Arc<hyper_staticfile::Static>,
+        staticfile: Arc<RwLock<hyper_staticfile::Static>>,
         scan: Arc<backend::ScanData>,
         scan_signal: Arc<(Mutex<bool>, Condvar)>,
         ) -> Self {
@@ -130,6 +130,7 @@ impl Service for Search {
 
         let cfg = self.config.clone();
         let scan = self.scan.clone();
+
         let task1: Box<Future<Item=Self::Response, Error=APIError>> = match (req.method(), req.path()) {
             (Method::Get, "/api/v1/status") => {
 
@@ -247,11 +248,23 @@ impl Service for Search {
             (Method::Post, "/api/v1/config") => {
                 let cfg1 = cfg.clone();
                 let cfg2 = cfg.clone();
+                let cfg3 = cfg.clone();
+                let staticfile = self.staticfile.clone();
+
                 let res = req_to_json::<std::collections::HashMap<String, String>>(req)
                      .and_then(move |patch| {
                          // modify the config
                          let mut cfg = cfg1.write().unwrap();
+                         let update_static = patch.contains_key("image_root");
                          cfg.update(patch);
+
+                         ok(update_static)
+                     })
+                     .and_then(move |update_static| {
+                         if update_static {
+                            let mut staticfile = staticfile.write().unwrap();
+                            *staticfile = make_staticfile(cfg3);
+                         }
 
                          ok(())
                      })
@@ -309,6 +322,7 @@ impl Service for Search {
                 println!("Redirecting to staticfile.");
 
                 let result = self.staticfile
+                    .read().unwrap()
                     .call(req)
                     .then(|result: Result<hyper::Response, hyper::Error>| {
                         match result {
@@ -359,6 +373,10 @@ pub fn get_cfg() -> backend::TifariConfig {
     }
 }
 
+fn make_staticfile(cfg: Arc<RwLock<backend::TifariConfig>>) -> hyper_staticfile::Static {
+    hyper_staticfile::Static::new(std::path::Path::new(cfg.read().unwrap().get_root()))
+}
+
 pub fn run_server(config: backend::TifariConfig) {
 
     use std::thread;
@@ -394,7 +412,8 @@ pub fn run_server(config: backend::TifariConfig) {
         });
     }
 
-    let staticfile = Arc::new(hyper_staticfile::Static::new(std::path::Path::new(cfg.read().unwrap().get_root())));
+    let staticfile = Arc::new(RwLock::new(make_staticfile(cfg.clone())));
+
     let service = APINewService::new(cfg, staticfile, scan, scan_signal);
     let server = hyper::server::Http::new().bind(&addr, service).unwrap();
 
