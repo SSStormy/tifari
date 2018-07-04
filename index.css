@@ -1,6 +1,4 @@
 .html, body {
-    font-family: "Open Sans", sans-serif;
-    font-size: 100%;
     background: #FAFAFA;
     margin: 0;
 }
@@ -12,47 +10,27 @@
     background-size: cover;
 }
 
-.header .container {
-    padding-top: 2%;
-    padding-bottom: 7%;
+.header .stuff{
+    padding-top: 20%;
+    padding-bottom: 10%;
+    padding-left: 10%;
+    padding-right: 10%;
 }
 
-.content {
-    padding-top: 30%;
-    padding-bottom: 40%;
+img {
+    max-width: 600px;
 }
 
-.left {
-    float: left;
-    width: 50%;
-}
-
-.left .img-wrap {
-    height: 100%;
-    position: relative;
-
-    /* Center contents */
+.centered {
     display: flex;
     justify-content: center;
-
-}
-
-.left .img-wrap img {
-    height: 100%;
-}
-
-.right {
-    float: right;
-    width: 50%;
-}
-
-.center {
     position: relative;
-    margin: auto;
-    width: 50%;
 }
 
-.center-internal {
-    display: flex;
-    justify-content: center;
+.gutter {
+    margin-bottom: 3%;
+}
+
+.page-header {
+    margin-bottom: 3%;
 }
