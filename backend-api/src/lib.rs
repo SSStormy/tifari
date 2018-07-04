@@ -142,7 +142,6 @@ impl Service for Search {
 
                 let get_status = || {
                     let is_scanning = scan.is_scanning();
-                    println!("Scan {}", is_scanning);
                     if is_scanning { return APIStatusEnum::Scanning; }
 
                     let metadata = match std::fs::metadata(cfg.read().unwrap().get_root()) {

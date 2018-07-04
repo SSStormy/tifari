@@ -8,7 +8,6 @@ import LinearProgress from '@material-ui/core/LinearProgress';
 import FormControlLabel from '@material-ui/core/FormControlLabel';
 import Checkbox from '@material-ui/core/Checkbox';
 import Collapse from '@material-ui/core/Collapse';
-import Switch from '@material-ui/core/Switch';
 import ListItem from '@material-ui/core/ListItem';
 import List from '@material-ui/core/List';
 import CircularProgress from '@material-ui/core/CircularProgress';
@@ -30,7 +29,6 @@ import Drawer from '@material-ui/core/Drawer';
 import Divider from '@material-ui/core/Divider';
 import CardContent from '@material-ui/core/CardContent';
 import CardActions from '@material-ui/core/CardActions';
-import Chip from '@material-ui/core/Chip';
 import Dialog from '@material-ui/core/Dialog';
 import DialogActions from '@material-ui/core/DialogActions';
 import DialogContent from '@material-ui/core/DialogContent';
@@ -549,6 +547,7 @@ class Bootstrapper extends Component {
 
         this.startBootstrap = this.startBootstrap.bind(this);
         this.submitImageFolderPath = this.submitImageFolderPath.bind(this);
+        this.foreignUpdateStatus = this.foreignUpdateStatus.bind(this);
     }
 
     componentWillMount() {
@@ -561,7 +560,7 @@ class Bootstrapper extends Component {
         if(!this.state.api) {
             api = new TifariAPI(getBackendUrl(), 
                 () => { /*success*/ },
-                () => this.setState({stage: BS_CANNOT_CONNECT})
+                () => this.setState({stage: BS_CANNOT_CONNECT}),
             );
             this.setState({api: api});
         } else {
@@ -577,31 +576,38 @@ class Bootstrapper extends Component {
 
     requeryConfigState(api, isInit) {
         ldebug("requery");
-        api.getStatus()
-            .then(payload => {
-                switch(payload.status) {
-                    case 0: // valid
-                        this.setState({stage: BS_SUCCESS});
-                        this.state.api.reload();
-                        break;
-                    case 1: //invalid image folder
-                        this.setState({stage: BS_NEEDS_SETUP});
-                        break;
-                    case 2: //image folder is not a folder
-                        this.setState({stage: BS_NEEDS_SETUP});
-                        break;
-                    case 3:
-                        if(!this.state.stage != BS_SCANNING) {
-                            this.setState({
-                                stage: BS_SCANNING, 
-                                scanTotal: payload.scan_total,
-                                scanCurrent: payload.scan_current,
-                            });
-                            setTimeout(() => this.requeryConfigState(api, isInit), 1000);
-                        }
-                        break;
-                }
-            });
+        return api.getStatus().then(payload => {
+            ldebug(payload);
+            switch(payload.status) {
+                case 0: // valid
+                    this.setState({stage: BS_SUCCESS});
+                    break;
+                case 1: //invalid image folder
+                    this.setState({stage: BS_NEEDS_SETUP});
+                    break;
+                case 2: //image folder is not a folder
+                    this.setState({stage: BS_NEEDS_SETUP});
+                    break;
+                case 3:
+                    if(!this.state.stage !== BS_SCANNING) {
+                        this.setState({
+                            stage: BS_SCANNING, 
+                            scanTotal: payload.scan_total,
+                            scanCurrent: payload.scan_current,
+                        });
+                        setTimeout(() => this.requeryConfigState(api, isInit), 1000);
+                    }
+                    break;
+                default:
+                    alert(`unknown config state ${payload.status}`);
+                    ldebug(payload);
+                    break;
+            }
+        });
+    }
+
+    foreignUpdateStatus() {
+        return this.requeryConfigState(this.state.api, true);
     }
 
     submitImageFolderPath() {
@@ -610,7 +616,7 @@ class Bootstrapper extends Component {
         };
 
         this.state.api.setConfig(cfg)
-            .then(() => this.state.api.reloadRoot())
+            .then(() => this.state.api.reload())
             .then(() => this.requeryConfigState(this.state.api, false));
     }
 
@@ -618,31 +624,46 @@ class Bootstrapper extends Component {
         ldebug("render boostrap");
         switch(this.state.stage) {
             case BS_SCANNING:
+
+                if(this.state.scanTotal > 0) {
+                    return (
+                        <Card className="center-paper" style={{width: "50%"}}>
+                            <CardContent>
+                                <div className="progress">
+                                    <LinearProgress 
+                                        variant="determinate" 
+                                        value={100 * (this.state.scanCurrent/ this.state.scanTotal)}
+                                    />
+                                </div>
+
+                                <Typography component="p" style={{float: "left"}}>
+                                    Cataloguing images into the database
+                                </Typography>
+                                <Typography component="p" style={{float: "right"}}>
+                                    {this.state.scanCurrent}/{this.state.scanTotal}
+                                </Typography>
+
+                                <br/>
+
+                                <Typography style={{float: "left"}}component="p">
+                                    You may close this tab and check back later.
+                                </Typography>
+
+                            </CardContent>
+                        </Card>
+                    );
+                }
                 return (
-                    <Card className="center-paper" style={{width: "50%"}}>
+                    <Card className="center-paper">
                         <CardContent>
-                            <div className="progress">
-                                <LinearProgress 
-                                    variant="determinate" 
-                                    value={100 * (this.state.scanCurrent/ this.state.scanTotal)}
-                                />
+                            <div className="scroller">
+                                <CircularProgress/> 
                             </div>
-
-                            <Typography component="p" style={{float: "left"}}>
-                                Cataloguing images into the database
-                            </Typography>
-                            <Typography component="p" style={{float: "right"}}>
-                                {this.state.scanCurrent}/{this.state.scanTotal}
-                            </Typography>
-
-                            <br/>
-
-                            <Typography style={{float: "left"}}component="p">
-                                You may close this tab and check back later.
-                            </Typography>
+                            <Typography>Scanning</Typography>
 
                         </CardContent>
                     </Card>
+
                 );
             case BS_CONNECTING:
                 return (
@@ -676,7 +697,7 @@ class Bootstrapper extends Component {
                 );
             case BS_SUCCESS:
                 return (
-                    <App api={this.state.api}/>
+                    <App api={this.state.api} updateStatus={this.foreignUpdateStatus}/>
                 );
             case BS_NEEDS_SETUP:
                 return (
@@ -812,11 +833,10 @@ class App extends Component {
     }
 
     foreignReload() {
-        this.updateToBeTaggedList()
-            .then(() => {
-                this.state.api.reloadRoot()
-                    .then(() => this.mutateState(mut => mut.showSnackbar("Reloaded backend")));
-            });
+        this.state.api.reload()
+            .then(() => this.props.updateStatus())
+            .then(() => this.updateToBeTaggedList())
+            .then(() => this.mutateState(mut => mut.showSnackbar("Reloaded backend")));
     }
 
     updateToBeTaggedList() {
@@ -1088,7 +1108,7 @@ class App extends Component {
     swapBackendUrl() {
         this.state.api.setEndpoint(this.state.backendUrlBuffer);
         localStorage.setItem("backendUrl", this.state.backendUrlBuffer);
-        this.state.api.reloadRoot();
+        this.state.api.reload();
     }
 
     dialogEditConfigSubmit() {

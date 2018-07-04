@@ -3,8 +3,11 @@ class TifariAPI {
 
     constructor(endpoint, callbackSuccess, callbackErr) {
         this.setEndpoint(endpoint);
-        this.callbackSuccess = callbackSuccess;
-        this.callbackErr = callbackErr;
+
+        this.state = {
+            callbackSuccess,
+            callbackErr,
+        };
 
         this.errHandle = this.errHandle.bind(this);
         this.onSuccess= this.onSuccess.bind(this);
@@ -30,11 +33,11 @@ class TifariAPI {
     }
 
     errHandle(err) {
-        this.callbackErr();
+        this.state.callbackErr();
     }
 
     onSuccess(val) {
-        this.callbackSuccess();
+        this.state.callbackSuccess();
         return val;
     }
 
@@ -90,7 +93,7 @@ class TifariAPI {
         );
     }
 
-    reloadRoot() {
+    reload() {
         return this.doRequest(() => 
             fetch(this.endpoint.reloadRoot, { method: "GET" })
         );
