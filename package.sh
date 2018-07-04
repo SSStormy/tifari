@@ -15,6 +15,7 @@ rm -rf release
 mkdir release
 cd release
 cp ../prod/target/release/prod.exe tifari.exe
+cp ../prod/target/release/prod tifari
 cp -r ../frontend/build static
 cd ..
 
