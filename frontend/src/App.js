@@ -610,6 +610,7 @@ class Bootstrapper extends Component {
         };
 
         this.state.api.setConfig(cfg)
+            .then(() => this.state.api.reloadRoot())
             .then(() => this.requeryConfigState(this.state.api, false));
     }
 
