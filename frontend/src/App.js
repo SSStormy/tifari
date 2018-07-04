@@ -835,7 +835,6 @@ class App extends Component {
     foreignReload() {
         this.state.api.reload()
             .then(() => this.props.updateStatus())
-            .then(() => this.updateToBeTaggedList())
             .then(() => this.mutateState(mut => mut.showSnackbar("Reloaded backend")));
     }
 
@@ -875,6 +874,7 @@ class App extends Component {
     }
 
     foreignShowToBeTaggedTab() { 
+        this.updateToBeTaggedList();
         this.mutateState(mut => mut.setActiveImageList(IMGS_TO_TAG));
     }
 
