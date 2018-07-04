@@ -5,3 +5,5 @@ authors = ["Justas Dabrila <justasdabrila@gmail.com>"]
 
 [dependencies]
 backend-api = { path = "../backend-api", version = "*" }
+open="1.2.1"
+ctrlc = { version = "3.0", features = ["termination"] }
