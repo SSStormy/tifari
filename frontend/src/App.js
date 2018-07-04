@@ -1580,7 +1580,7 @@ class App extends Component {
                         <TextField
                             autoFocus
                             fullWidth
-                            margin="dense"
+                            margin="normal"
                             id="url"
                             label="Backend URL"
                             type="url"
@@ -1643,6 +1643,7 @@ class App extends Component {
                             fullWidth
                             type="text"
                             onChange={this.foreignDialogEditConfigUpdateDbRoot}
+                            margin="normal"
                         />
 
                         <TextField
@@ -1650,9 +1651,15 @@ class App extends Component {
                             id="image_root"
                             label="Image root"
                             fullWidth
+                            margin="normal"
                             type="text"
                             onChange={this.foreignDialogEditConfigUpdateImageRoot}
                         />
+
+                        <Typography component="p" color="secondary">
+                            WARNING: changing the image root folder WILL REMOVE all images and their tags from the database if that image cannot be found in the new folder. 
+                            Do NOT change this unless you sure you want to migrate!
+                        </Typography>
 
                         {this.state.dialogEditConfigError && 
                             <Typography color="secondary" component="p">
