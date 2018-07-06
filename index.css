@@ -21,6 +21,11 @@ img {
     max-width: 600px;
 }
 
+
+.layout-img {
+    max-width: auto;
+}
+
 .centered {
     display: flex;
     justify-content: center;

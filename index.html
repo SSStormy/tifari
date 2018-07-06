@@ -111,11 +111,36 @@
 
                 </div>
             </div>
+
+            <div class="gutter container">
+                <div class="row">
+
+                    <div class="col">
+                        <p>The initial scan of the image folder could take a while. It's safe to close the tab and check
+                        back later.</p>
+                    </div>
+                    
+                    <div class="col">
+                        <img src="scanning.png" alt="">
+                    </div>
+
+                </div>
+            </div>
+ 
         </div>
 
-        <div class="container">
+        <div class="page-header" id="usage">
+            <h1>Usage<h1/>
+        </div>
+
+        <div class="gutter container">
+
             <div class="page-header">
-                <h2>Inserting images</h2>
+                <h2>Layout</h2>
+            </div>
+
+            <div class="centered">
+            <img class="layout-img" src="layout.png" alt="">
             </div>
         </div>
 
@@ -123,16 +148,26 @@
             <div class="page-header">
                 <h2>Tagging</h2>
             </div>
+            <div class="gutter container">
+                <div class="row">
+                    <div class="col">
+                        <p>Hovering over an image will reveal a "Show tag list" button. Clicking on it will show a
+                        new menu. This is the tag editor.</p>
 
-            <div class="left">
-                <div class="img-wrap">
-                    <img src="tag_editor.png" alt="">
-                </div>
-            </div>
+                        <p>The tag editor lists all of the tags that tifari knows. Adding tags to tifari is done by
+                        adding a new tag to an image. </p>
 
-            <div class="right">
-                <div class="center">
-                    <p>Asdf</p>
+                        <p>You can add tags to an image in the tag editor by marking the checkbox of an existing tag or
+                        typing in the name of a tag into the "New tag" text box.</p>
+
+                        <p>You can remove a tag from an image by unmarking the tag's checkbox.</p>
+                        <p>A tag with no images that use it will be automatically removed from tifari.</p>
+                    </div>
+                    
+                    <div class="col">
+                        <img src="tag_editor.png" alt="">
+                    </div>
+
                 </div>
             </div>
         </div>
@@ -141,27 +176,64 @@
             <div class="page-header">
                 <h2>Searching</h2>
             </div>
+            <div class="gutter container">
+                <div class="row">
+                    <div class="col">
 
-            <div class="left">
-                <div class="img-wrap">
-                    <img src="search.png" alt="">
+                    <p>Searching is done by typing in a query into the "Search by tags" text field.</p>
+                    <p>Queries consist of any combination of "must contain" search tags and "must not contain" search tags<p>
+
+                    <p>"Must contain" tags are simply just tags. If we have a tag called "head" then the "must contain"
+                    tag is simply "head". This type of search tag will match images that contain the given search tag.</p>
+
+                    <p>"Must not contain" tags are tags that are prefixed with a dash ("-"). If we have tag called
+                    "head' then the "must not contain" tag is "-head". This type of search tag will match images that DO
+                    NOT contain the given search tag.</p>
+                    
+                    </div>
+                    <div class="col">
+                        <img src="searchtags.png" alt="">
+                    </div>
+
                 </div>
             </div>
+        </div>
 
-            <div class="right">
-                <div class="center">
-                    <p>Asdf</p>
-                </div>
-            </div>
-
-
+        <div class="page-header" id="usage">
+            <h1>Advanced<h1/>
         </div>
 
         <div class="container">
             <div class="page-header">
-                <h2>Helpful tools</h2>
+                <h2>Config</h2>
+            </div>
+
+            <div class="gutter container">
+                <p>The config.json file tells tifari what addresses/ports to bind the frontend and API to, as well as
+                where to look for images and the database</p>
+
+                <p>The schema for the config.json can be found <a
+                                                                   href="https://github.com/SSStormy/tifari/search?utf8=%E2%9C%93&q=pub+struct+TifariConfig+&type=">here</a></p>
             </div>
         </div>
+
+        <div class="container">
+            <div class="page-header">
+                <h2>API</h2>
+            </div>
+
+            <div class="gutter container">
+                <p>The frontend communicates with the rust backend via a web API. By default it is hosted at
+                127.0.01:8001. The default hosting address can be changed in the config.</p>
+
+                <p>Currently the API is undocumented. For now refer to the Serive implementation for the Search service
+                in the backend-api project <a
+                                               href="https://github.com/SSStormy/tifari/blob/master/backend-api/src/lib.rs">here</a></p>
+            </div>
+        </div>
+
+
+
     </div>
   </body>
 </html>
